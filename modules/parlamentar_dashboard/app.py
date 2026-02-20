@@ -163,6 +163,10 @@ hr { border-color: #374151; margin: 1.5rem 0; }
 
 
 # ── Helpers ────────────────────────────────────────────────────
+def _fmt_int(valor: int) -> str:
+    """Formata inteiros com separador de milhar brasileiro."""
+    return f"{valor:,}".replace(",", ".")
+
 def _fmt_brl(valor: float) -> str:
     """Formata valores monetários no padrão brasileiro com segurança para NaN."""
     try:
@@ -413,11 +417,14 @@ with tab2:
             st.markdown("### 📊 Eficiência Legislativa")
             c_roi1, c_roi2, c_roi3 = st.columns(3)
             with c_roi1:
-                st.metric("📜 Proposições", qtd_prop)
+                st.metric("📜 Proposições", _fmt_int(qtd_prop))
             with c_roi2:
-                st.metric("💰 Gasto Total", f"R$ {total_desp/1e3:.1f}k")
+                # Gasto Total com formato BRL resumido ou completo
+                gasto_fmt = _fmt_brl(total_desp).replace(",00", "") 
+                st.metric("💰 Gasto Total", gasto_fmt)
             with c_roi3:
-                roi_label = f"R$ {roi:,.0f}" if roi > 0 else "N/A (Sem Produção)"
+                # ROI com formatação BRL correta
+                roi_label = _fmt_brl(roi).replace(",00", "") if roi > 0 else "N/A (Sem Produção)"
                 st.metric("⚖️ R$ / Proposição", roi_label, 
                           help="Custo médio por projeto de lei ou proposição legislativa.")
 
@@ -544,7 +551,10 @@ with tab3:
             # Ordenar por menor custo por proposição, mas apenas para quem tem ao menos 1 proposição
             df_roi = df_rank[df_rank["qtd_proposicoes"] > 0].sort_values("custo_por_proposicao", ascending=True).head(10)
             st.dataframe(
-                df_roi[["nome", "qtd_proposicoes", "custo_por_proposicao"]].style.format({"custo_por_proposicao": "R$ {:,.0f}"}),
+                df_roi[["nome", "qtd_proposicoes", "custo_por_proposicao"]].style.format({
+                    "custo_por_proposicao": lambda x: _fmt_brl(x).replace(",00", ""),
+                    "qtd_proposicoes": "{:n}"
+                }),
                 hide_index=True,
                 use_container_width=True
             )

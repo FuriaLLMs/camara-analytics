@@ -102,6 +102,10 @@ def _paginate(
             break
         p = dict(p)
         p["pagina"] = p.get("pagina", 1) + 1
+        
+    # Bug Hunt: Avisar se truncamos os dados
+    if len(todos) >= max_paginas * p.get("itens", 100) and not silent:
+        st.warning(f"⚠️ Os dados podem estar incompletos (limite de {max_paginas} páginas atingido).", icon="🧱")
 
     return todos
 
@@ -147,6 +151,7 @@ def get_despesas(deputado_id: int, ano: int) -> pd.DataFrame:
         f"{BASE_URL}/deputados/{deputado_id}/despesas",
         params={"ano": ano, "itens": 100},
         silent=True,
+        max_paginas=50, # Aumentado para 5000 registros p/ garantir ano completo
     )
     return pd.DataFrame(registros) if registros else pd.DataFrame()
 
@@ -284,9 +289,9 @@ def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
         qtd_prop = len(proposicoes)
         
         # 3. Cálculo de Eficiência (ROI)
-        # Se qtd_prop for 0, o índice é o próprio gasto total (caro/ineficiente)
-        # Se quisermos o custo unitário, dividimos:
-        custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else total_gasto
+        # Se qtd_prop for 0, o custo é considerado o total gasto (pior caso)
+        # mas marcamos com um valor alto para o ranking
+        custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else float('inf')
 
         return {
             "id": dep["id"],
