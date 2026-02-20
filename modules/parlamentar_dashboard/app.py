@@ -46,6 +46,9 @@ from modules.tracker_gastos.analyzer import (
     check_ceap_usage,
     analyze_marketing_costs,
 )
+from modules.tema_miner.ai_core import AICore
+from modules.tema_miner.cleaner import process_ementas
+from modules.tema_miner.visualizer import generate_wordcloud
 
 # ── Configuração da Página ──────────────────────────────────────
 st.set_page_config(
@@ -336,6 +339,13 @@ with tab2:
                     # Bug Hunt: ROI mais informativo para produção zero
                     roi = total_g / qtd_prop if qtd_prop > 0 else 0
 
+                    st.write("🤖 Processando IA Legislativa...")
+                    textos_ementas = [p.get("ementa", "") for p in prop if p.get("ementa")]
+                    # Unir ementas para análise de complexidade média
+                    texto_completo = " ".join(textos_ementas)
+                    complexidade = AICore.calcular_indice_complexidade(texto_completo)
+                    tokens_deputado = process_ementas(textos_ementas)
+
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
                 st.session_state.analise_feita = True
@@ -345,7 +355,9 @@ with tab2:
                     "df_disc": df_disc, "df_eventos": df_eventos,
                     "orgaos": orgaos, "frentes": frentes, "ano": ano,
                     "outliers": df_outliers, "ceap": ceap_status,
-                    "qtd_prop": qtd_prop, "roi": roi
+                    "qtd_prop": qtd_prop, "roi": roi,
+                    "complexidade": complexidade,
+                    "tokens": tokens_deputado
                 }
             else:
                 d = st.session_state.analise_dados
@@ -359,6 +371,8 @@ with tab2:
                 ceap_status = d.get("ceap", {})
                 qtd_prop    = d.get("qtd_prop", 0)
                 roi         = d.get("roi", 0)
+                complexidade = d.get("complexidade", {"score": 0, "nivel": "N/A"})
+                tokens_deputado = d.get("tokens", [])
                 ano        = d.get("ano", ano_atual - 1)
 
             # ── Perfil ────────────────────────────────────────
@@ -431,12 +445,13 @@ with tab2:
             st.divider()
 
             # ── Abas de visualização ──────────────────────────
-            sub1, sub2, sub3, sub4, sub5 = st.tabs([
+            sub1, sub2, sub3, sub4, sub5, sub6 = st.tabs([
                 "💰 Despesas CEAP",
                 "🎙️ Discursos",
                 "📅 Eventos",
                 "🏛️ Órgãos",
                 "🏳️ Frentes",
+                "🧠 IA & Linguística",
             ])
 
             with sub1:
@@ -505,6 +520,33 @@ with tab2:
                     plot_frentes_table(frentes),
                     width="stretch",
                 )
+
+            with sub6:
+                st.markdown("### 🧠 Inteligência Artificial (V4.0)")
+                ci1, ci2 = st.columns([1, 2])
+                
+                with ci1:
+                    st.metric("📊 Índice de Complexidade", complexidade["score"], 
+                              help="Flesch Reading Ease (PT). Quanto maior, mais acessível o texto.")
+                    st.markdown(f"**Nível de Acesso:**\n`{complexidade['nivel']}`")
+                    
+                    st.divider()
+                    st.markdown("#### 🗣️ Sentimento & Retórica")
+                    st.write("*(Análise via LLM em andamento)*")
+                    st.warning("⚠️ Aguardando Chave de API para análise multimodal.")
+                    
+                    st.divider()
+                    st.markdown("#### 📜 Resumo do Perfil")
+                    st.write(f"Parlamentar foca em: `{', '.join(tokens_deputado[:5]) if tokens_deputado else 'N/A'}`")
+
+                with ci2:
+                    st.markdown("#### ☁️ Nuvem de Temas Legislativos")
+                    if tokens_deputado:
+                        fig_wc = generate_wordcloud(tokens_deputado, titulo=f"Eixos de Atuação — {nome_oficial}")
+                        if fig_wc:
+                            st.pyplot(fig_wc)
+                    else:
+                        st.info("Nenhuma proposição registrada para gerar nuvem de temas.")
 
             # ── Seção de Auditoria (Novidade V2.0) ────────────
             st.divider()
