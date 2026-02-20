@@ -75,7 +75,8 @@ def check_ceap_usage(df: pd.DataFrame, uf: str) -> dict:
     # Pega o mês mais recente no dataframe
     ultimo_mes = resumo_mensal.sort_values(["ano", "mes"], ascending=False).iloc[0]
     total = ultimo_mes["valor_liquido"]
-    percentual = (total / limite) * 100
+    # Bug Hunt: Proteção contra divisão por zero no limite
+    percentual = (total / limite * 100) if limite > 0 else 0
     
     return {
         "ano": int(ultimo_mes["ano"]),
@@ -83,18 +84,16 @@ def check_ceap_usage(df: pd.DataFrame, uf: str) -> dict:
         "total": total,
         "limite": limite,
         "percentual": round(percentual, 2),
-        "excedeu": total > limite
+        "excedeu": total > limite if limite > 0 else False
     }
 
 def analyze_marketing_costs(df: pd.DataFrame) -> float:
     """
     Isola e soma gastos específicos com marketing/divulgação.
     """
-    categorias_marketing = [
-        "DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.",
-        "MANUTENÇÃO DE ESCRITÓRIO DE APOIO À ATIVIDADE PARLAMENTAR", # Às vezes usado para material
-        "PUBLICIDADE E PROPAGANDA" # Se existir esse termo
-    ]
-    
-    mask = df["categoria"].str.contains("DIVULGAÇÃO", case=False, na=False)
-    return df[mask]["valor_liquido"].sum()
+    # Bug Hunt: Busca completa em termos de marketing
+    regex_marketing = "|".join([
+        "DIVULGAÇÃO", "PROPAGANDA", "PUBLICIDADE", "MARKETING", "COMUNICAÇÃO"
+    ])
+    mask = df["categoria"].str.contains(regex_marketing, case=False, na=False)
+    return float(df[mask]["valor_liquido"].sum())

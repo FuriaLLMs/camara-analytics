@@ -32,39 +32,38 @@ TIMEOUT = 30
 
 # ── Helper HTTP centralizado ────────────────────────────────────
 
+# Configuração de Sessão Global para Reuso de Conexões
+session = requests.Session()
+session.headers.update(HEADERS)
+
 def _get(
     url: str,
     params: dict | None = None,
     silent: bool = False,
 ) -> dict | None:
     """
-    GET centralizado com tratamento de erros por tipo.
-
-    Args:
-        url: URL completa do endpoint.
-        params: Parâmetros de query string.
-        silent: Se True, suprime warnings na UI (para dados opcionais).
-
-    Returns:
-        JSON como dicionário, ou None em caso de falha.
+    GET centralizado com tratamento de erros, retentativas e validação de JSON.
     """
     try:
-        r = requests.get(url, headers=HEADERS, params=params, timeout=TIMEOUT)
+        r = session.get(url, params=params, timeout=TIMEOUT)
         r.raise_for_status()
+        
+        # Bug Hunt: Validar se o corpo não está vazio antes de .json()
+        if not r.text.strip():
+            return None
+            
         return r.json()
-    except requests.exceptions.ConnectionError:
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
         if not silent:
-            st.warning("⚠️ Sem conexão com a internet.", icon="🌐")
-    except requests.exceptions.Timeout:
-        if not silent:
-            st.warning("⏳ API da Câmara demorou demais para responder.", icon="⏱️")
+            st.error("🔌 Falha de rede: Verifique sua conexão.", icon="🌐")
     except requests.exceptions.HTTPError as e:
-        code = e.response.status_code if e.response else "?"
+        if e.response.status_code == 429:
+            if not silent: st.warning("🐢 A API da Câmara limitou as requisições (Rate Limit). Aguarde um instante.", icon="⏳")
+        elif not silent:
+            st.warning(f"⚠️ Erro na API (HTTP {e.response.status_code})", icon="🔴")
+    except Exception as e:
         if not silent:
-            st.warning(f"⚠️ Erro HTTP {code} na API da Câmara.", icon="🔴")
-    except requests.exceptions.RequestException as e:
-        if not silent:
-            st.warning(f"⚠️ Erro inesperado: {e}", icon="❌")
+            st.warning(f"💣 Erro crítico inesperado: {str(e)[:50]}...", icon="⚠️")
     return None
 
 
@@ -252,10 +251,15 @@ def get_ufs() -> list[str]:
 # ── Helpers de cálculo ──────────────────────────────────────────
 
 def calcular_total_despesas(df: pd.DataFrame) -> float:
-    """Soma do valorLiquido de um DataFrame de despesas."""
+    """Soma do valorLiquido de um DataFrame de despesas com tratamento de tipos."""
     if df.empty or "valorLiquido" not in df.columns:
         return 0.0
-    return pd.to_numeric(df["valorLiquido"], errors="coerce").fillna(0.0).sum()
+    
+    # Bug Hunt: Garantir que valores vazios ou strings de erro não quebrem a soma
+    series = pd.to_numeric(df["valorLiquido"], errors="coerce")
+    if series.isna().all():
+        return 0.0
+    return float(series.sum())
 
 
 @st.cache_data(ttl=86400, show_spinner="Construindo Ranking de Eficiência Global (isso pode levar 2-3 minutos)...")
@@ -295,7 +299,7 @@ def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
             "custo_por_proposicao": custo_por_prop
         }
 
-    with ThreadPoolExecutor(max_workers=20) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:  # Reduzido para 10 para evitar Rate Limit
         results = list(executor.map(fetch_data, deputados))
 
     df_ranking = pd.DataFrame(results).sort_values("total_gasto", ascending=False)

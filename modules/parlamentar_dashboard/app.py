@@ -164,7 +164,13 @@ hr { border-color: #374151; margin: 1.5rem 0; }
 
 # ── Helpers ────────────────────────────────────────────────────
 def _fmt_brl(valor: float) -> str:
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    """Formata valores monetários no padrão brasileiro com segurança para NaN."""
+    try:
+        if pd.isna(valor) or valor is None:
+            return "R$ 0,00"
+        return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except (ValueError, TypeError):
+        return "R$ 0,00"
 
 
 # ── Session state ──────────────────────────────────────────────
@@ -188,7 +194,9 @@ with st.sidebar:
     st.markdown("### ⚙️ Filtros")
     st.caption("Filtre os dados exibidos no dashboard")
 
+    # Bug Hunt: Anos dinâmicos
     ano_atual = datetime.now().year
+    anos_disponiveis = [ano_atual, ano_atual - 1, ano_atual - 2]
 
     with st.spinner("Carregando UFs..."):
         ufs = get_ufs()
@@ -321,7 +329,8 @@ with tab2:
                     prop = get_proposicoes(dep_id, ano)
                     qtd_prop = len(prop)
                     total_g = calcular_total_despesas(df_desp)
-                    roi = total_g / qtd_prop if qtd_prop > 0 else total_g
+                    # Bug Hunt: ROI mais informativo para produção zero
+                    roi = total_g / qtd_prop if qtd_prop > 0 else 0
 
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
@@ -377,20 +386,19 @@ with tab2:
             st.divider()
 
             # ── Métricas de atividade ─────────────────────────
-            total_desp = calcular_total_despesas(df_desp)
-            total_notas = len(df_desp)
-            total_disc = len(df_disc)
-            total_eventos = len(df_eventos)
-            total_orgaos = len(orgaos)
-            total_frentes = len(frentes)
+            st.divider()
 
-            m1, m2, m3, m4, m5, m6 = st.columns(6)
-            m1.metric("💰 Gasto CEAP", _fmt_brl(total_desp))
-            m2.metric("🧾 Notas Fiscais", total_notas)
-            m3.metric("🎙️ Discursos", total_disc)
-            m4.metric("📅 Eventos", total_eventos)
-            m5.metric("🏛️ Comissões", total_orgaos)
-            m6.metric("🏳️ Frentes", total_frentes)
+            # Bug Hunt: Layout métricas (3x2 em telas pequenas é melhor do que 6 columns)
+            m_col1, m_col2, m_col3 = st.columns(3)
+            with m_col1:
+                st.metric("💰 Gasto CEAP", _fmt_brl(total_desp))
+                st.metric("📅 Eventos", total_eventos)
+            with m_col2:
+                st.metric("🧾 Notas Fiscais", total_notas)
+                st.metric("🏛️ Comissões", total_orgaos)
+            with m_col3:
+                st.metric("🎙️ Discursos", total_disc)
+                st.metric("🏳️ Frentes", total_frentes)
 
             st.divider()
 
@@ -402,7 +410,8 @@ with tab2:
             with c_roi2:
                 st.metric("💰 Gasto Total", f"R$ {total_desp/1e3:.1f}k")
             with c_roi3:
-                st.metric("⚖️ R$ / Proposição", f"R$ {roi:,.0f}", 
+                roi_label = f"R$ {roi:,.0f}" if roi > 0 else "N/A (Sem Produção)"
+                st.metric("⚖️ R$ / Proposição", roi_label, 
                           help="Custo médio por projeto de lei ou proposição legislativa.")
 
             st.divider()
@@ -503,7 +512,7 @@ with tab2:
 # ─── Aba 3: Rankings & Auditoria Global ────────────────────────
 with tab3:
     st.subheader("🏆 Rankings Globais e Auditoria da Casa")
-    ano_sel_rank = st.selectbox("Escolha o ano para o ranking", options=[2024, 2023, 2022], index=1)
+    ano_sel_rank = st.selectbox("Escolha o ano para o ranking", options=anos_disponiveis, index=1)
     
     with st.spinner("Compilando dados de todos os 513 deputados..."):
         df_rank = get_ranking_gastos_global(ano_sel_rank)

@@ -67,7 +67,13 @@ def _empty_fig(mensagem: str) -> go.Figure:
 
 
 def _fmt_brl(v: float) -> str:
-    return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    """Formatação BRL robusta."""
+    try:
+        if pd.isna(v) or v is None:
+            return "R$ 0,00"
+        return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except (ValueError, TypeError):
+        return "R$ 0,00"
 
 
 # ── 1. Treemap de despesas ──────────────────────────────────────
@@ -319,17 +325,13 @@ def plot_donut_partidos(deputados: list[dict]) -> go.Figure:
     if "siglaPartido" not in df.columns:
         return _empty_fig("Dados de partido indisponíveis")
 
+    # Bug Hunt: Normalização robusta de contagem por partido
     contagem = (
         df["siglaPartido"].value_counts()
         .reset_index()
-        .rename(columns={"index": "partido", "siglaPartido": "total"})
-        .head(15)  # Top 15 partidos
     )
-    # Compatibilidade com diferentes versões do Pandas
-    if "siglaPartido" in contagem.columns and "count" not in contagem.columns:
-        contagem.columns = ["partido", "total"]
-    elif "count" in contagem.columns:
-        contagem.columns = ["partido", "total"]
+    contagem.columns = ["partido", "total"]
+    contagem = contagem.head(15)  # Top 15 partidos
 
     fig = go.Figure(
         go.Pie(
@@ -718,11 +720,14 @@ def plot_efficiency_quadrants(df: pd.DataFrame) -> go.Figure:
     fig.add_vline(x=med_gasto, line_dash="dash", line_color=TEXTO2, opacity=0.5)
     fig.add_hline(y=med_prop, line_dash="dash", line_color=TEXTO2, opacity=0.5)
 
-    # Anotações dos Quadrantes (cantos)
-    fig.add_annotation(x=med_gasto*0.5, y=med_prop*1.5, text="⭐ Alta Eficiência", showarrow=False, font=dict(color=VERDE))
-    fig.add_annotation(x=med_gasto*1.5, y=med_prop*1.5, text="💰 Alto Investimento", showarrow=False, font=dict(color=AZUL))
-    fig.add_annotation(x=med_gasto*0.5, y=med_prop*0.5, text="🛡️ Baixa Exposição", showarrow=False, font=dict(color=AMARELO))
-    fig.add_annotation(x=med_gasto*1.5, y=med_prop*0.5, text="⚠️ Baixa Eficiência", showarrow=False, font=dict(color=VERMELHO))
+    # Anotações dos Quadrantes (cantos baseados em percentis para maior robustez)
+    y_max = df["qtd_proposicoes"].max()
+    x_max = df["total_gasto"].max()
+
+    fig.add_annotation(x=med_gasto*0.3, y=y_max*0.8, text="⭐ Alta Eficiência", showarrow=False, font=dict(color=VERDE, size=14))
+    fig.add_annotation(x=x_max*0.7, y=y_max*0.8, text="💰 Alto Investimento", showarrow=False, font=dict(color=AZUL, size=14))
+    fig.add_annotation(x=med_gasto*0.3, y=med_prop*0.3, text="🛡️ Baixa Exposição", showarrow=False, font=dict(color=AMARELO, size=14))
+    fig.add_annotation(x=x_max*0.7, y=med_prop*0.3, text="⚠️ Baixa Eficiência", showarrow=False, font=dict(color=VERMELHO, size=14))
 
     fig.update_layout(
         **_layout(height=500),
