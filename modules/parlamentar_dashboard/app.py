@@ -20,6 +20,8 @@ from modules.parlamentar_dashboard.data_loader import (
     get_discursos,
     get_eventos,
     get_orgaos,
+    get_frentes_deputado,
+    get_partidos,
     get_ufs,
     calcular_total_despesas,
     get_ranking_gastos_global,
