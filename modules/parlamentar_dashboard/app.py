@@ -347,15 +347,15 @@ with tab2:
                     complexidade = AICore.calcular_indice_complexidade(texto_completo)
                     tokens_deputado = process_ementas(textos_ementas)
                     
-                    # Chamadas reais do Gemini
-                    resumo_ia = AICore.sumarizar_perfil_llm(tokens_deputado)
+                    # Chamadas reais do Gemini (Com Fallback e Cache Persistente)
+                    resumo_ia = AICore.sumarizar_perfil_llm(tokens_deputado, dep_id)
                     
                     primeira_ementa = textos_ementas[0] if textos_ementas else ""
                     politiques = AICore.traduzir_politiques(primeira_ementa)
                     
                     # Sentimento - Pegar o discurso mais recente
                     ultimo_discurso = df_disc.iloc[0]["transcricao"] if not df_disc.empty else ""
-                    sentimento = AICore.analisar_sentimento_llm(ultimo_discurso)
+                    sentimento = AICore.analisar_sentimento_llm(ultimo_discurso, dep_id)
 
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
