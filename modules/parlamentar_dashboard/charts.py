@@ -730,8 +730,7 @@ def plot_efficiency_quadrants(df: pd.DataFrame) -> go.Figure:
     fig.add_annotation(x=x_max*0.7, y=med_prop*0.3, text="⚠️ Baixa Eficiência", showarrow=False, font=dict(color=VERMELHO, size=14))
 
     fig.update_layout(
-        **_layout(height=500),
-        legend=dict(orientation="h", y=-0.2)
+        **_layout(height=500, legend=dict(orientation="h", y=-0.2))
     )
     return fig
 
