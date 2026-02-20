@@ -131,7 +131,7 @@ class AICore:
     @st.cache_data(ttl=86400, show_spinner=False)
     def sumarizar_perfil_llm(tokens: List[str], dep_id: int) -> str:
         """Gera resumo via API ou Heurística local de tokens."""
-        if not tokens: return "Sem dados de produção."
+        if not tokens: return "Sem dados de produção registrados."
         
         cache_key = f"resumo_{dep_id}"
         prompt = f"Resuma o foco deste parlamentar em 10 palavras: {', '.join(tokens[:20])}"
@@ -140,8 +140,18 @@ class AICore:
         if res: return res
         
         # Fallback Heurístico (DNA Parlamentar Automático)
-        top_terms = ", ".join([t.capitalize() for t in tokens[:5]])
-        return f"Atuação técnica focada prioritariamente em: {top_terms}."
+        # Pega tokens únicos para evitar repetição e filtra os 6 mais relevantes (curados)
+        vistos = set()
+        top_tokens = []
+        for t in tokens:
+            t_low = t.lower()
+            if t_low not in vistos and len(t) > 4:
+                top_tokens.append(t.capitalize())
+                vistos.add(t_low)
+            if len(top_tokens) >= 6: break
+
+        temas = ", ".join(top_tokens)
+        return f"Eixos de Atuação Técnica: {temas}."
 
     @staticmethod
     @st.cache_data(ttl=86400, show_spinner=False)

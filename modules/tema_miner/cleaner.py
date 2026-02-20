@@ -35,6 +35,11 @@ _STOPWORDS_EXTRA = {
     "conforme", "cujo", "respectivo", "referido", "nos", "às",
     "ser", "deve", "pode", "seja", "fica", "deste", "desta",
     "através", "mediante", "contida", "demais", "demaia", "inciso",
+    "mesa", "diretora", "oficio", "indicação", "redação", "capítulo",
+    "título", "constituição", "membro", "ementa", "federal", "pública",
+    "nacional", "parágrafo", "seguinte", "forma", "termos", "sobre",
+    "outras", "providências", "artigo", "leis", "diretrizes", "bases",
+    "alínea", "item", "incisos", "anexo", "único", "caput", "parágrafos",
 }
 
 
