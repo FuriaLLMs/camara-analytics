@@ -2,6 +2,7 @@
 import os
 import re
 import nltk
+import streamlit as st
 import google.generativeai as genai
 from dotenv import load_dotenv
 from typing import Dict, List, Optional
@@ -32,7 +33,10 @@ class AICore:
             response = model.generate_content(prompt)
             return response.text.strip()
         except Exception as e:
-            return f"Erro na IA: {str(e)[:50]}"
+            # Bug Hunt: Tratamento amigável para estouro de cota (Rate Limit)
+            if "429" in str(e):
+                return "⏳ Cota Excedida (Aguarde 1 min)"
+            return f"IA Temporariamente Indisponível"
 
     @staticmethod
     def calcular_indice_complexidade(texto: str) -> Dict[str, float]:
@@ -75,6 +79,7 @@ class AICore:
         }
 
     @staticmethod
+    @st.cache_data(ttl=3600, show_spinner=False)
     def analisar_sentimento_llm(texto: str) -> str:
         """Analisa se o discurso é Técnico, Agressivo ou Conciliador via Gemini."""
         if not texto: return "N/A"
@@ -88,6 +93,7 @@ class AICore:
         return AICore._call_gemini(prompt)
 
     @staticmethod
+    @st.cache_data(ttl=3600, show_spinner=False)
     def sumarizar_perfil_llm(tokens: List[str]) -> str:
         """Gera uma frase resumindo o foco do parlamentar baseado em termos-chave."""
         if not tokens: return "Sem dados de produção."
@@ -99,6 +105,7 @@ class AICore:
         return AICore._call_gemini(prompt)
 
     @staticmethod
+    @st.cache_data(ttl=3600, show_spinner=False)
     def traduzir_politiques(ementa: str) -> str:
         """Converte linguagem técnica jurídica em linguagem cidadã simples."""
         if not ementa: return ""
