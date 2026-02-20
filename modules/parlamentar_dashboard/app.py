@@ -263,7 +263,10 @@ with tab2:
 
         dep_id = opcoes.get(nome_sel)
 
-        if analisar or (st.session_state.analise_feita and st.session_state.analise_dep_id == dep_id):
+        # Guard: nome_sel pode ser None se opcoes estiver vazio
+        if not dep_id:
+            st.info("Selecione um deputado e clique em Analisar.", icon="👆")
+        elif analisar or (st.session_state.analise_feita and st.session_state.analise_dep_id == dep_id):
             if analisar or not st.session_state.analise_dados:
                 # Ano padrão: current – 1 (mais completo)
                 ano = ano_atual - 1
@@ -343,12 +346,13 @@ with tab2:
             total_orgaos = len(orgaos)
             total_frentes = len(frentes)
 
-            m1, m2, m3, m4, m5 = st.columns(5)
-            m1.metric(f"💰 Gasto CEAP", _fmt_brl(total_desp))
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1.metric("💰 Gasto CEAP", _fmt_brl(total_desp))
             m2.metric("🧾 Notas Fiscais", total_notas)
             m3.metric("🎙️ Discursos", total_disc)
             m4.metric("📅 Eventos", total_eventos)
             m5.metric("🏛️ Comissões", total_orgaos)
+            m6.metric("🏳️ Frentes", total_frentes)
 
             st.divider()
 

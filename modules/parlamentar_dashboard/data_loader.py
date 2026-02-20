@@ -164,8 +164,6 @@ def get_discursos(deputado_id: int, ano: int) -> pd.DataFrame:
             "dataInicio": f"{ano}-01-01",
             "dataFim": f"{ano}-12-31",
             "itens": 100,
-            "ordenarPor": "dataHoraInicio",
-            "ordem": "DESC",
         },
         silent=True,
     )
@@ -220,10 +218,8 @@ def get_frentes_deputado(deputado_id: int) -> list[dict]:
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_partidos() -> list[str]:
     """Lista ordenada de siglas de partidos com representação na Câmara. Cache 24h."""
-    data = _get(f"{BASE_URL}/partidos", {"itens": 100})
-    if not data:
-        return []
-    return sorted([p["sigla"] for p in data.get("dados", []) if p.get("sigla")])
+    registros = _paginate(f"{BASE_URL}/partidos", params={"itens": 100})
+    return sorted([p["sigla"] for p in registros if p.get("sigla")])
 
 
 @st.cache_data(ttl=86400, show_spinner=False)

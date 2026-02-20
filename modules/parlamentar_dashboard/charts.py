@@ -481,15 +481,20 @@ def plot_orgaos_table(orgaos: list[dict]) -> go.Figure:
     for col in ["📅 Início", "🏁 Fim"]:
         if col in df_disp.columns:
             df_disp[col] = pd.to_datetime(
-                df_disp[col], errors="coerce"
+                df_disp[col], errors="coerce", format="ISO8601"
             ).dt.strftime("%d/%m/%Y").fillna("—")
 
     # Highlight linha ainda ativa (sem dataFim)
     n = len(df_disp)
-    is_active = df["dataFim"].isna() if "dataFim" in df.columns else [False] * n
+    # is_active pode ser pd.Series (quando dataFim existe) ou list pura
+    # Convertemos para list para evitar AttributeError com .iloc em lista
+    if "dataFim" in df.columns:
+        is_active_list = df["dataFim"].isna().tolist()
+    else:
+        is_active_list = [False] * n
     AZUL_ALPHA = "rgba(59,130,246,0.20)"  # #3B82F6 com 20% de opacidade
     fill = [
-        [AZUL_ALPHA if is_active.iloc[i] else (BG_PLOT if i % 2 == 0 else BG_CARD)
+        [AZUL_ALPHA if is_active_list[i] else (BG_PLOT if i % 2 == 0 else BG_CARD)
          for i in range(n)]
         for _ in df_disp.columns
     ]
