@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "sistema-camara-api"
+version = "0.1.0"
+description = "Ecossistema modular de análise de dados da Câmara dos Deputados do Brasil"
+authors = ["Douglas <douglasdsr@example.com>"]
+readme = "README.md"
+packages = [{include = "modules"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.31.0"
+pandas = "^2.1.0"
+networkx = "^3.2.0"
+matplotlib = "^3.8.0"
+python-telegram-bot = "^20.7"
+streamlit = "^1.29.0"
+plotly = "^5.18.0"
+wordcloud = "^1.9.2"
+nltk = "^3.8.1"
+pyarrow = ">=17.0.0"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.12.0"
+isort = "^5.13.0"
+ruff = "^0.1.9"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

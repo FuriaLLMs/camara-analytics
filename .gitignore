@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Poetry / Virtualenvs
+.venv/
+venv/
+.env
+
+# Streamlit
+.streamlit/
+
+# Outputs gerados pelos módulos
+outputs/
+
+# Dados locais do notifier
+modules/legis_notifier/last_id.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
