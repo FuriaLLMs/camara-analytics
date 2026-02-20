@@ -657,6 +657,6 @@ def plot_ceap_limit_gauge(total: float, limite: float, uf: str) -> go.Figure:
         }
     ))
 
-    fig.update_layout(**_layout(height=280), margin=dict(t=80, b=20, l=30, r=30))
+    fig.update_layout(**_layout(height=280, margin=dict(t=80, b=20, l=30, r=30)))
     return fig
 
