@@ -349,8 +349,8 @@ with tab2:
                     # Chamadas reais do Gemini
                     resumo_ia = AICore.sumarizar_perfil_llm(tokens_deputado)
                     
-                    pimeira_ementa = textos_ementas[0] if textos_ementas else ""
-                    politiques_traduzido = AICore.traduzir_politiques(pimeira_ementa)
+                    primeira_ementa = textos_ementas[0] if textos_ementas else ""
+                    politiques_traduzido = AICore.traduzir_politiques(primeira_ementa)
                     
                     # Sentimento - Pegar o discurso mais recente
                     ultimo_discurso = df_disc.iloc[0]["transcricao"] if not df_disc.empty else ""

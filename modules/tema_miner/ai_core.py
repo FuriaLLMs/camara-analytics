@@ -1,3 +1,4 @@
+# v4.1.1 - Forçando recarregamento de módulo
 import os
 import re
 import nltk
