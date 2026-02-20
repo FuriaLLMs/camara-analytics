@@ -23,6 +23,7 @@ from modules.parlamentar_dashboard.data_loader import (
     get_frentes_deputado,
     get_partidos,
     get_ufs,
+    get_proposicoes,
     calcular_total_despesas,
     get_ranking_gastos_global,
 )
@@ -38,6 +39,7 @@ from modules.parlamentar_dashboard.charts import (
     plot_spending_ranking,
     plot_anomaly_bubbles,
     plot_ceap_limit_gauge,
+    plot_efficiency_quadrants,
 )
 from modules.tracker_gastos.analyzer import (
     detect_outliers,
@@ -315,6 +317,12 @@ with tab2:
                     df_outliers = detect_outliers(df_desp_audit)
                     ceap_status = check_ceap_usage(df_desp_audit.rename(columns={"ano": "ano", "mes": "mes"}), dados_dep.get("siglaUf", "DF"))
 
+                    st.write("📊 Produtividade Legislativa...")
+                    prop = get_proposicoes(dep_id, ano)
+                    qtd_prop = len(prop)
+                    total_g = calcular_total_despesas(df_desp)
+                    roi = total_g / qtd_prop if qtd_prop > 0 else total_g
+
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
                 st.session_state.analise_feita = True
@@ -323,7 +331,8 @@ with tab2:
                     "detalhes": detalhes, "df_desp": df_desp,
                     "df_disc": df_disc, "df_eventos": df_eventos,
                     "orgaos": orgaos, "frentes": frentes, "ano": ano,
-                    "outliers": df_outliers, "ceap": ceap_status
+                    "outliers": df_outliers, "ceap": ceap_status,
+                    "qtd_prop": qtd_prop, "roi": roi
                 }
             else:
                 d = st.session_state.analise_dados
@@ -335,6 +344,8 @@ with tab2:
                 frentes    = d["frentes"]
                 df_outliers = d.get("outliers", pd.DataFrame())
                 ceap_status = d.get("ceap", {})
+                qtd_prop    = d.get("qtd_prop", 0)
+                roi         = d.get("roi", 0)
                 ano        = d.get("ano", ano_atual - 1)
 
             # ── Perfil ────────────────────────────────────────
@@ -380,6 +391,19 @@ with tab2:
             m4.metric("📅 Eventos", total_eventos)
             m5.metric("🏛️ Comissões", total_orgaos)
             m6.metric("🏳️ Frentes", total_frentes)
+
+            st.divider()
+
+            # ── Indicadores de Produção vs Gasto (V3.0)
+            st.markdown("### 📊 Eficiência Legislativa")
+            c_roi1, c_roi2, c_roi3 = st.columns(3)
+            with c_roi1:
+                st.metric("📜 Proposições", qtd_prop)
+            with c_roi2:
+                st.metric("💰 Gasto Total", f"R$ {total_desp/1e3:.1f}k")
+            with c_roi3:
+                st.metric("⚖️ R$ / Proposição", f"R$ {roi:,.0f}", 
+                          help="Custo médio por projeto de lei ou proposição legislativa.")
 
             st.divider()
 
@@ -497,9 +521,20 @@ with tab3:
         st.divider()
         col_r1, col_r2 = st.columns([2, 1])
         with col_r1:
+            st.plotly_chart(plot_efficiency_quadrants(df_rank), use_container_width=True)
             st.plotly_chart(plot_spending_ranking(df_rank), use_container_width=True)
         with col_r2:
-            st.markdown("### 📋 Top 10 Gastadores")
+            st.markdown("### 🏆 Top 10 Eficiência (ROI)")
+            # Ordenar por menor custo por proposição, mas apenas para quem tem ao menos 1 proposição
+            df_roi = df_rank[df_rank["qtd_proposicoes"] > 0].sort_values("custo_por_proposicao", ascending=True).head(10)
+            st.dataframe(
+                df_roi[["nome", "qtd_proposicoes", "custo_por_proposicao"]].style.format({"custo_por_proposicao": "R$ {:,.0f}"}),
+                hide_index=True,
+                use_container_width=True
+            )
+            
+            st.divider()
+            st.markdown("### 📋 Maiores Gastos")
             st.dataframe(
                 df_rank[["nome", "siglaPartido", "total_gasto"]].head(10).style.format({"total_gasto": "R$ {:,.2f}"}),
                 hide_index=True,

@@ -686,3 +686,47 @@ def plot_ceap_limit_gauge(total: float, limite: float, uf: str) -> go.Figure:
     )
     return fig
 
+
+# ── 13. Quadrantes de Eficiência (ROI) ─────────────────────────
+def plot_efficiency_quadrants(df: pd.DataFrame) -> go.Figure:
+    """Gráfico de Quadrantes: Custo (CEAP) vs. Entrega (Proposições)."""
+    if df.empty or "qtd_proposicoes" not in df.columns:
+        return _empty_fig("Dados de eficiência não disponíveis")
+
+    # Média para definir os quadrantes
+    med_gasto = df["total_gasto"].median()
+    med_prop = df["qtd_proposicoes"].median()
+
+    fig = px.scatter(
+        df,
+        x="total_gasto",
+        y="qtd_proposicoes",
+        color="siglaPartido",
+        hover_name="nome",
+        size="num_notas",
+        title="📊 Custo-Benefício Parlamentar: Gasto vs. Produção",
+        labels={
+            "total_gasto": "Total Gasto (R$)",
+            "qtd_proposicoes": "Proposições Legislativas",
+            "siglaPartido": "Partido"
+        },
+        template="plotly_dark",
+        color_discrete_sequence=CORES_CATEGORIAS
+    )
+
+    # Linhas dos Quadrantes
+    fig.add_vline(x=med_gasto, line_dash="dash", line_color=TEXTO2, opacity=0.5)
+    fig.add_hline(y=med_prop, line_dash="dash", line_color=TEXTO2, opacity=0.5)
+
+    # Anotações dos Quadrantes (cantos)
+    fig.add_annotation(x=med_gasto*0.5, y=med_prop*1.5, text="⭐ Alta Eficiência", showarrow=False, font=dict(color=VERDE))
+    fig.add_annotation(x=med_gasto*1.5, y=med_prop*1.5, text="💰 Alto Investimento", showarrow=False, font=dict(color=AZUL))
+    fig.add_annotation(x=med_gasto*0.5, y=med_prop*0.5, text="🛡️ Baixa Exposição", showarrow=False, font=dict(color=AMARELO))
+    fig.add_annotation(x=med_gasto*1.5, y=med_prop*0.5, text="⚠️ Baixa Eficiência", showarrow=False, font=dict(color=VERMELHO))
+
+    fig.update_layout(
+        **_layout(height=500),
+        legend=dict(orientation="h", y=-0.2)
+    )
+    return fig
+

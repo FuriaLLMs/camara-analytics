@@ -216,6 +216,22 @@ def get_frentes_deputado(deputado_id: int) -> list[dict]:
     return data.get("dados", []) if data else []
 
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_proposicoes(deputado_id: int, ano: int) -> list[dict]:
+    """
+    Busca proposições de autoria do deputado no ano especificado.
+    Filtra por idDeputadoAutor e ano.
+    """
+    params = {
+        "idDeputadoAutor": deputado_id,
+        "ano": ano,
+        "ordem": "ASC",
+        "ordenarPor": "id"
+    }
+    return _paginate(f"{BASE_URL}/proposicoes", params, silent=True)
+
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_partidos() -> list[str]:
     """Lista ordenada de siglas de partidos com representação na Câmara. Cache 24h."""
@@ -242,11 +258,11 @@ def calcular_total_despesas(df: pd.DataFrame) -> float:
     return pd.to_numeric(df["valorLiquido"], errors="coerce").fillna(0.0).sum()
 
 
-@st.cache_data(ttl=86400, show_spinner="Construindo Ranking Global (isso pode levar 1-2 minutos)...")
+@st.cache_data(ttl=86400, show_spinner="Construindo Ranking de Eficiência Global (isso pode levar 2-3 minutos)...")
 def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
     """
-    Busca o total gasto por CADA UM dos 513 deputados no ano especificado.
-    Usa paralelismo para acelerar o processo.
+    Busca o total gasto e a produção legislativa por CADA UM dos 513 deputados.
+    Calcula o ROI Legislativo (R$ por Proposição).
     """
     deputados = get_deputados()
     if not deputados:
@@ -254,29 +270,33 @@ def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
 
     results = []
 
-    def fetch_spending(dep):
-        # Para o ranking global, pegamos apenas a primeira página de despesas (itens=1)
-        # para obter o total se houver campo 'total' na API, ou apenas pegamos tudo
-        # Mas a API não retorna o total no meta da paginação de forma simples e confiável em todos os casos.
-        # Então faremos uma busca de despesas mas pedindo o mínimo de dados possível
-        # ou pegando a soma.
+    def fetch_data(dep):
+        # 1. Gastos
+        df_desp = get_despesas(dep["id"], ano)
+        total_gasto = calcular_total_despesas(df_desp)
         
-        # Estratégia: somar as despesas do deputado
-        # Como queremos o ranking, precisamos dos dados.
-        # Para otimizar, como esta função é cacheada por 24h, vamos fazer o trabalho pesado.
-        df = get_despesas(dep["id"], ano)
-        total = calcular_total_despesas(df)
+        # 2. Produção Legislativa
+        proposicoes = get_proposicoes(dep["id"], ano)
+        qtd_prop = len(proposicoes)
+        
+        # 3. Cálculo de Eficiência (ROI)
+        # Se qtd_prop for 0, o índice é o próprio gasto total (caro/ineficiente)
+        # Se quisermos o custo unitário, dividimos:
+        custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else total_gasto
+
         return {
             "id": dep["id"],
             "nome": dep["nome"],
             "siglaPartido": dep["siglaPartido"],
             "siglaUf": dep["siglaUf"],
-            "total_gasto": total,
-            "num_notas": len(df)
+            "total_gasto": total_gasto,
+            "num_notas": len(df_desp),
+            "qtd_proposicoes": qtd_prop,
+            "custo_por_proposicao": custo_por_prop
         }
 
     with ThreadPoolExecutor(max_workers=20) as executor:
-        results = list(executor.map(fetch_spending, deputados))
+        results = list(executor.map(fetch_data, deputados))
 
     df_ranking = pd.DataFrame(results).sort_values("total_gasto", ascending=False)
     return df_ranking.reset_index(drop=True)
