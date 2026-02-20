@@ -1,6 +1,16 @@
 """
 Carregador de dados para o dashboard parlamentar.
 Todas as funções usam @st.cache_data para minimizar chamadas à API da Câmara.
+
+Endpoints utilizados (API v2):
+- GET /deputados                       → lista paginada
+- GET /deputados/{id}                  → detalhe
+- GET /deputados/{id}/despesas         → despesas CEAP paginadas
+- GET /deputados/{id}/discursos        → discursos em plenário
+- GET /deputados/{id}/eventos          → presença em eventos
+- GET /deputados/{id}/orgaos           → comissões e órgãos
+- GET /deputados/{id}/frentes          → frentes parlamentares
+- GET /partidos                        → lista de partidos
 """
 
 from __future__ import annotations
@@ -14,22 +24,28 @@ import streamlit as st
 BASE_URL = "https://dadosabertos.camara.leg.br/api/v2"
 HEADERS = {
     "Accept": "application/json",
-    "User-Agent": "SistemaCamaraAnalise/1.0 (projeto educacional)",
+    "User-Agent": "CamaraAnalytics/1.0 (projeto educacional)",
 }
 TIMEOUT = 30
 
 
-def _get(url: str, params: dict | None = None, silent: bool = False) -> dict | None:
+# ── Helper HTTP centralizado ────────────────────────────────────
+
+def _get(
+    url: str,
+    params: dict | None = None,
+    silent: bool = False,
+) -> dict | None:
     """
-    GET helper com tratamento de erros centralizado.
+    GET centralizado com tratamento de erros por tipo.
 
     Args:
-        url: URL da requisição.
+        url: URL completa do endpoint.
         params: Parâmetros de query string.
         silent: Se True, suprime warnings na UI (para dados opcionais).
 
     Returns:
-        JSON como dicionário, ou None em caso de erro.
+        JSON como dicionário, ou None em caso de falha.
     """
     try:
         r = requests.get(url, headers=HEADERS, params=params, timeout=TIMEOUT)
@@ -37,46 +53,44 @@ def _get(url: str, params: dict | None = None, silent: bool = False) -> dict | N
         return r.json()
     except requests.exceptions.ConnectionError:
         if not silent:
-            st.warning("⚠️ Sem conexão com a internet. Verifique sua rede.", icon="🌐")
+            st.warning("⚠️ Sem conexão com a internet.", icon="🌐")
     except requests.exceptions.Timeout:
         if not silent:
-            st.warning("⏳ A API da Câmara demorou demais para responder. Tente novamente.", icon="⏱️")
+            st.warning("⏳ API da Câmara demorou demais para responder.", icon="⏱️")
     except requests.exceptions.HTTPError as e:
         code = e.response.status_code if e.response else "?"
         if not silent:
-            st.warning(f"⚠️ Erro HTTP {code} ao acessar a API da Câmara.", icon="🔴")
+            st.warning(f"⚠️ Erro HTTP {code} na API da Câmara.", icon="🔴")
     except requests.exceptions.RequestException as e:
         if not silent:
             st.warning(f"⚠️ Erro inesperado: {e}", icon="❌")
     return None
 
 
-# ── Funções de dados com cache ──────────────────────────────────
-
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_deputados(
-    uf: Optional[str] = None,
-    partido: Optional[str] = None,
+def _paginate(
+    url: str,
+    params: dict,
+    silent: bool = False,
+    max_paginas: int = 20,
 ) -> list[dict]:
     """
-    Busca deputados com filtros opcionais. Cache de 1 hora.
+    Busca paginada genérica usando links HATEOAS (rel='next').
 
     Args:
-        uf: Sigla do estado (ex: 'SP').
-        partido: Sigla do partido (ex: 'PT').
+        url: URL do endpoint.
+        params: Parâmetros base da query.
+        silent: Suprimir warnings de erro.
+        max_paginas: Limite de segurança contra loops infinitos.
 
     Returns:
-        Lista de deputados (vazia em caso de erro).
+        Lista agregada de todos os registros encontrados.
     """
-    params: dict = {"itens": 100, "ordem": "ASC", "ordenarPor": "nome", "pagina": 1}
-    if uf:
-        params["siglaUf"] = uf
-    if partido:
-        params["siglaPartido"] = partido
-
     todos: list[dict] = []
-    while True:
-        data = _get(f"{BASE_URL}/deputados", params)
+    p = dict(params)
+    p.setdefault("pagina", 1)
+
+    for _ in range(max_paginas):
+        data = _get(url, p, silent=silent)
         if not data:
             break
         registros = data.get("dados", [])
@@ -86,109 +100,135 @@ def get_deputados(
         links = data.get("links", [])
         if not any(lnk.get("rel") == "next" for lnk in links):
             break
-        params = dict(params)
-        params["pagina"] = params.get("pagina", 1) + 1
+        p = dict(p)
+        p["pagina"] = p.get("pagina", 1) + 1
 
     return todos
 
 
+# ── Funções de dados ────────────────────────────────────────────
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_deputados(
+    uf: Optional[str] = None,
+    partido: Optional[str] = None,
+) -> list[dict]:
+    """
+    Lista completa de deputados com filtros opcionais. Cache 1h.
+    Pagina automaticamente até obter os 513 deputados.
+    """
+    params: dict = {
+        "itens": 100,
+        "ordem": "ASC",
+        "ordenarPor": "nome",
+    }
+    if uf:
+        params["siglaUf"] = uf
+    if partido:
+        params["siglaPartido"] = partido
+
+    return _paginate(f"{BASE_URL}/deputados", params)
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_deputado_detail(deputado_id: int) -> dict:
-    """
-    Busca detalhes completos de um deputado (foto, gabinete, etc.). Cache 1h.
-
-    Args:
-        deputado_id: ID do deputado na API da Câmara.
-
-    Returns:
-        Dicionário com dados do deputado, ou {} em caso de erro.
-    """
+    """Detalhe completo do deputado (foto, gabinete, email). Cache 1h."""
     data = _get(f"{BASE_URL}/deputados/{deputado_id}")
     return data.get("dados", {}) if data else {}
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def get_votacoes(deputado_id: int, ano: int) -> pd.DataFrame:
+def get_despesas(deputado_id: int, ano: int) -> pd.DataFrame:
     """
-    Busca votações de um deputado em um ano específico. Cache 30min.
-
-    Args:
-        deputado_id: ID do deputado.
-        ano: Ano das votações.
-
-    Returns:
-        DataFrame com votações, ou DataFrame vazio em caso de erro.
+    Todas as despesas CEAP do deputado no ano, com paginação completa. Cache 30min.
+    Cada página contém até 100 registros.
     """
-    params = {
-        "ano": ano,
-        "itens": 100,
-        "ordem": "DESC",
-        "ordenarPor": "dataVotacao",
-    }
-    data = _get(f"{BASE_URL}/deputados/{deputado_id}/votacoes", params, silent=True)
-    if not data:
-        return pd.DataFrame()
-
-    registros = data.get("dados", [])
+    registros = _paginate(
+        f"{BASE_URL}/deputados/{deputado_id}/despesas",
+        params={"ano": ano, "itens": 100},
+        silent=True,
+    )
     return pd.DataFrame(registros) if registros else pd.DataFrame()
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def get_despesas(deputado_id: int, ano: int) -> pd.DataFrame:
+def get_discursos(deputado_id: int, ano: int) -> pd.DataFrame:
     """
-    Busca todas as despesas CEAP de um deputado com paginação. Cache 30min.
+    Discursos do deputado no ano. Cache 30min.
 
-    Args:
-        deputado_id: ID do deputado.
-        ano: Ano das despesas.
-
-    Returns:
-        DataFrame com despesas, ou DataFrame vazio.
+    Campos retornados: dataHoraInicio, tipoDiscurso, urlTexto, faseEvento, etc.
     """
-    all_data: list[dict] = []
-    pagina = 1
-    url = f"{BASE_URL}/deputados/{deputado_id}/despesas"
-    max_paginas = 20  # Limite de segurança para evitar loop infinito
+    registros = _paginate(
+        f"{BASE_URL}/deputados/{deputado_id}/discursos",
+        params={
+            "dataInicio": f"{ano}-01-01",
+            "dataFim": f"{ano}-12-31",
+            "itens": 100,
+            "ordenarPor": "dataHoraInicio",
+            "ordem": "DESC",
+        },
+        silent=True,
+    )
+    return pd.DataFrame(registros) if registros else pd.DataFrame()
 
-    while pagina <= max_paginas:
-        data = _get(url, {"ano": ano, "itens": 100, "pagina": pagina}, silent=True)
-        if not data:
-            break
 
-        registros = data.get("dados", [])
-        if not registros:
-            break
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_eventos(deputado_id: int, ano: int) -> pd.DataFrame:
+    """
+    Eventos com participação do deputado no ano. Cache 30min.
 
-        all_data.extend(registros)
+    Campos retornados: id, dataHoraInicio, situacao, descricaoTipo, descricao, orgaos.
+    """
+    registros = _paginate(
+        f"{BASE_URL}/deputados/{deputado_id}/eventos",
+        params={
+            "dataInicio": f"{ano}-01-01",
+            "dataFim": f"{ano}-12-31",
+            "itens": 100,
+        },
+        silent=True,
+    )
+    return pd.DataFrame(registros) if registros else pd.DataFrame()
 
-        links = data.get("links", [])
-        if not any(lnk.get("rel") == "next" for lnk in links):
-            break
 
-        pagina += 1
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_orgaos(deputado_id: int) -> list[dict]:
+    """
+    Órgãos (comissões) dos quais o deputado é membro. Cache 1h.
 
-    return pd.DataFrame(all_data) if all_data else pd.DataFrame()
+    Campos retornados: siglaOrgao, nomeOrgao, titulo, dataInicio, dataFim.
+    """
+    return _paginate(
+        f"{BASE_URL}/deputados/{deputado_id}/orgaos",
+        params={"itens": 100},
+        silent=True,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_frentes_deputado(deputado_id: int) -> list[dict]:
+    """
+    Frentes parlamentares das quais o deputado é membro. Cache 1h.
+
+    Campos retornados: id, titulo, idLegislatura.
+    Nota: a API não aceita `itens` para este endpoint.
+    """
+    data = _get(f"{BASE_URL}/deputados/{deputado_id}/frentes", silent=True)
+    return data.get("dados", []) if data else []
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_partidos() -> list[str]:
-    """
-    Lista de siglas de partidos com representação na Câmara. Cache 24h.
-
-    Returns:
-        Lista ordenada de siglas de partidos.
-    """
+    """Lista ordenada de siglas de partidos com representação na Câmara. Cache 24h."""
     data = _get(f"{BASE_URL}/partidos", {"itens": 100})
     if not data:
         return []
-    return sorted(
-        [p["sigla"] for p in data.get("dados", []) if p.get("sigla")]
-    )
+    return sorted([p["sigla"] for p in data.get("dados", []) if p.get("sigla")])
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_ufs() -> list[str]:
-    """Retorna lista estática de UFs brasileiras. Cache 24h."""
+    """Lista estática de UFs. Cache 24h."""
     return [
         "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO",
         "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR",
@@ -196,16 +236,10 @@ def get_ufs() -> list[str]:
     ]
 
 
+# ── Helpers de cálculo ──────────────────────────────────────────
+
 def calcular_total_despesas(df: pd.DataFrame) -> float:
-    """
-    Calcula o total de despesas líquidas de um DataFrame de gastos.
-
-    Args:
-        df: DataFrame de despesas da API.
-
-    Returns:
-        Soma dos valores líquidos como float.
-    """
+    """Soma do valorLiquido de um DataFrame de despesas."""
     if df.empty or "valorLiquido" not in df.columns:
         return 0.0
     return pd.to_numeric(df["valorLiquido"], errors="coerce").fillna(0.0).sum()

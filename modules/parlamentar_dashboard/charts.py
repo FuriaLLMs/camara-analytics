@@ -369,3 +369,198 @@ def plot_donut_partidos(deputados: list[dict]) -> go.Figure:
         )],
     )
     return fig
+
+
+# ── 6. Timeline de discursos ────────────────────────────────────
+def plot_discursos_timeline(df: pd.DataFrame, nome_dep: str = "") -> go.Figure:
+    """Barras mensais de discursos em plenário."""
+    if df.empty or "dataHoraInicio" not in df.columns:
+        return _empty_fig("Nenhum discurso registrado neste período")
+
+    df_copy = df.copy()
+    df_copy["dataHoraInicio"] = pd.to_datetime(df_copy["dataHoraInicio"], errors="coerce")
+    df_copy = df_copy.dropna(subset=["dataHoraInicio"])
+
+    if df_copy.empty:
+        return _empty_fig("Datas de discursos inválidas")
+
+    df_copy["mes"] = df_copy["dataHoraInicio"].dt.to_period("M").astype(str)
+    contagem = df_copy.groupby("mes").size().reset_index(name="qtd").sort_values("mes")
+
+    fig = go.Figure(
+        go.Bar(
+            x=contagem["mes"],
+            y=contagem["qtd"],
+            marker=dict(
+                color=VERDE,
+                line=dict(color=BG_CARD, width=1),
+                opacity=0.85,
+            ),
+            text=contagem["qtd"],
+            textposition="outside",
+            textfont=dict(color=TEXTO, size=12),
+            hovertemplate="<b>%{x}</b><br>Discursos: <b>%{y}</b><extra></extra>",
+        )
+    )
+    fig.update_layout(
+        **_layout(height=340),
+        title=dict(
+            text=f"🎙️ Discursos em Plenário — <b>{nome_dep}</b>",
+            font=dict(size=16), x=0,
+        ),
+        xaxis=dict(tickangle=-40, gridcolor=BORDA, tickfont=dict(color=TEXTO2, size=11),
+                   title="", linecolor=BORDA),
+        yaxis=dict(gridcolor=BORDA, tickfont=dict(color=TEXTO2, size=11),
+                   title="Discursos", titlefont=dict(color=TEXTO2), linecolor=BORDA),
+    )
+    return fig
+
+
+# ── 7. Presença em eventos por tipo ────────────────────────────
+def plot_eventos_presenca(df: pd.DataFrame, nome_dep: str = "") -> go.Figure:
+    """Distribuição de eventos por tipo de sessão."""
+    if df.empty or "descricaoTipo" not in df.columns:
+        return _empty_fig("Nenhum evento registrado neste período")
+
+    contagem = (
+        df["descricaoTipo"].value_counts()
+        .reset_index()
+    )
+    # Garantir nomes de colunas independente da versão do pandas
+    contagem.columns = ["tipo", "qtd"]
+    contagem = contagem.head(10)
+
+    fig = go.Figure(
+        go.Bar(
+            x=contagem["qtd"],
+            y=contagem["tipo"],
+            orientation="h",
+            marker=dict(
+                color=CORES_CATEGORIAS[:len(contagem)],
+                line=dict(color=BG_CARD, width=1),
+            ),
+            text=contagem["qtd"],
+            textposition="outside",
+            textfont=dict(color=TEXTO, size=12),
+            hovertemplate="<b>%{y}</b><br>Eventos: <b>%{x}</b><extra></extra>",
+        )
+    )
+    fig.update_layout(
+        **_layout(height=min(420, 120 + len(contagem) * 38)),
+        title=dict(
+            text=f"📅 Presença em Eventos — <b>{nome_dep}</b>",
+            font=dict(size=16), x=0,
+        ),
+        xaxis=dict(gridcolor=BORDA, tickfont=dict(color=TEXTO2, size=11),
+                   title="Eventos", titlefont=dict(color=TEXTO2)),
+        yaxis=dict(gridcolor=BORDA, tickfont=dict(color=TEXTO2, size=11),
+                   title="", autorange="reversed"),
+    )
+    return fig
+
+
+# ── 8. Tabela de órgãos/comissões ──────────────────────────────
+def plot_orgaos_table(orgaos: list[dict]) -> go.Figure:
+    """Tabela premium de comissões e órgãos do deputado."""
+    if not orgaos:
+        return _empty_fig("Deputado não participa de órgãos registrados")
+
+    df = pd.DataFrame(orgaos)
+
+    colunas_map = {
+        "siglaOrgao":  "🏛️ Sigla",
+        "nomeOrgao":   "📋 Órgão / Comissão",
+        "titulo":      "🎫 Cargo",
+        "dataInicio":  "📅 Início",
+        "dataFim":     "🏁 Fim",
+    }
+    cols = [c for c in colunas_map if c in df.columns]
+    df_disp = df[cols].rename(columns=colunas_map).fillna("—")
+
+    # Formatar datas
+    for col in ["📅 Início", "🏁 Fim"]:
+        if col in df_disp.columns:
+            df_disp[col] = pd.to_datetime(
+                df_disp[col], errors="coerce"
+            ).dt.strftime("%d/%m/%Y").fillna("—")
+
+    # Highlight linha ainda ativa (sem dataFim)
+    n = len(df_disp)
+    is_active = df["dataFim"].isna() if "dataFim" in df.columns else [False] * n
+    fill = [
+        [AZUL + "33" if is_active.iloc[i] else (BG_PLOT if i % 2 == 0 else BG_CARD)
+         for i in range(n)]
+        for _ in df_disp.columns
+    ]
+
+    col_widths = [60, 350, 160, 90, 90][:len(df_disp.columns)]
+    fig = go.Figure(go.Table(
+        columnwidth=col_widths,
+        header=dict(
+            values=[f"<b>{c}</b>" for c in df_disp.columns],
+            fill_color=AZUL,
+            font=dict(color="white", size=13, family=_FONTE["family"]),
+            align="left", height=40,
+            line=dict(color=BG_CARD, width=2),
+        ),
+        cells=dict(
+            values=[df_disp[c].tolist() for c in df_disp.columns],
+            fill_color=fill,
+            font=dict(color=TEXTO, size=12, family=_FONTE["family"]),
+            align="left", height=32,
+            line=dict(color=BORDA, width=1),
+        ),
+    ))
+    fig.update_layout(
+        paper_bgcolor=BG_CARD,
+        margin=dict(t=5, l=0, r=0, b=5),
+        height=min(640, 80 + n * 33),
+    )
+    return fig
+
+
+# ── 9. Tabela de frentes parlamentares ─────────────────────────
+def plot_frentes_table(frentes: list[dict]) -> go.Figure:
+    """Tabela compacta das frentes parlamentares do deputado."""
+    if not frentes:
+        return _empty_fig("Deputado não participa de frentes parlamentares registradas")
+
+    df = pd.DataFrame(frentes).fillna("—")
+
+    colunas_map = {
+        "titulo":        "🏳️ Frente Parlamentar",
+        "idLegislatura": "📜 Legislatura",
+    }
+    cols = [c for c in colunas_map if c in df.columns]
+    df_disp = df[cols].rename(columns=colunas_map)
+
+    n = len(df_disp)
+    fill = [
+        [BG_PLOT if i % 2 == 0 else BG_CARD for i in range(n)]
+        for _ in df_disp.columns
+    ]
+
+    fig = go.Figure(go.Table(
+        columnwidth=[500, 100],
+        header=dict(
+            values=[f"<b>{c}</b>" for c in df_disp.columns],
+            fill_color=AMARELO,
+            font=dict(color=BG_CARD, size=13, family=_FONTE["family"]),
+            align="left", height=40,
+            line=dict(color=BG_CARD, width=2),
+        ),
+        cells=dict(
+            values=[df_disp[c].tolist() for c in df_disp.columns],
+            fill_color=fill,
+            font=dict(color=TEXTO, size=12, family=_FONTE["family"]),
+            align="left", height=30,
+            line=dict(color=BORDA, width=1),
+        ),
+    ))
+    fig.update_layout(
+        paper_bgcolor=BG_CARD,
+        margin=dict(t=5, l=0, r=0, b=5),
+        height=min(620, 80 + n * 31),
+    )
+    return fig
+
