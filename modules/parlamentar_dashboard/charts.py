@@ -636,8 +636,10 @@ def plot_anomaly_bubbles(df_outliers: pd.DataFrame) -> go.Figure:
     )
     
     fig.update_layout(
-        **_layout(height=450),
-        legend=dict(title_text="Categorias de Gastos", orientation="h", y=-0.2)
+        **_layout(
+            height=450, 
+            legend=dict(title_text="Categorias de Gastos", orientation="h", y=-0.2)
+        )
     )
     return fig
 
