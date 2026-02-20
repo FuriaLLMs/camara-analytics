@@ -46,7 +46,9 @@ from modules.tracker_gastos.analyzer import (
     check_ceap_usage,
     analyze_marketing_costs,
 )
+import importlib
 from modules.tema_miner.ai_core import AICore
+importlib.reload(importlib.import_module("modules.tema_miner.ai_core"))
 from modules.tema_miner.cleaner import process_ementas
 from modules.tema_miner.visualizer import generate_wordcloud
 
@@ -340,6 +342,9 @@ with tab2:
                     roi = total_g / qtd_prop if qtd_prop > 0 else 0
 
                     st.write("🤖 Processando IA Legislativa...")
+                    # DEBUG: Verificar o que o Streamlit está vendo
+                    st.write(f"🔍 DEBUG Metodos: {[m for m in dir(AICore) if not m.startswith('__')]}")
+                    
                     textos_ementas = [p.get("ementa", "") for p in prop if p.get("ementa")]
                     # Unir ementas para análise de complexidade média
                     texto_completo = " ".join(textos_ementas)

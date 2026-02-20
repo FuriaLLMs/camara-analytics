@@ -1,4 +1,4 @@
-# v4.1.1 - Forçando recarregamento de módulo
+# v4.1.2 - Forçando detecção de arquivos
 import os
 import re
 import nltk
