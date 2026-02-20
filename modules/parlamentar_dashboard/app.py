@@ -345,6 +345,16 @@ with tab2:
                     texto_completo = " ".join(textos_ementas)
                     complexidade = AICore.calcular_indice_complexidade(texto_completo)
                     tokens_deputado = process_ementas(textos_ementas)
+                    
+                    # Chamadas reais do Gemini
+                    resumo_ia = AICore.sumarizar_perfil_llm(tokens_deputado)
+                    
+                    pimeira_ementa = textos_ementas[0] if textos_ementas else ""
+                    politiques_traduzido = AICore.traduzir_politiques(pimeira_ementa)
+                    
+                    # Sentimento - Pegar o discurso mais recente
+                    ultimo_discurso = df_disc.iloc[0]["transcricao"] if not df_disc.empty else ""
+                    sentimento_ia = AICore.analisar_sentimento_llm(ultimo_discurso)
 
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
@@ -357,7 +367,10 @@ with tab2:
                     "outliers": df_outliers, "ceap": ceap_status,
                     "qtd_prop": qtd_prop, "roi": roi,
                     "complexidade": complexidade,
-                    "tokens": tokens_deputado
+                    "tokens": tokens_deputado,
+                    "resumo_ia": resumo_ia,
+                    "politiques": politiques_traduzido,
+                    "sentimento": sentimento_ia
                 }
             else:
                 d = st.session_state.analise_dados
@@ -373,6 +386,9 @@ with tab2:
                 roi         = d.get("roi", 0)
                 complexidade = d.get("complexidade", {"score": 0, "nivel": "N/A"})
                 tokens_deputado = d.get("tokens", [])
+                resumo_ia = d.get("resumo_ia", "Processando...")
+                politiques = d.get("politiques", "N/A")
+                sentimento = d.get("sentimento", "N/A")
                 ano        = d.get("ano", ano_atual - 1)
 
             # ── Perfil ────────────────────────────────────────
@@ -532,14 +548,19 @@ with tab2:
                     
                     st.divider()
                     st.markdown("#### 🗣️ Sentimento & Retórica")
-                    st.write("*(Análise via LLM em andamento)*")
-                    st.warning("⚠️ Aguardando Chave de API para análise multimodal.")
+                    st.info(f"O tom predominante do discurso mais recente foi: **{sentimento}**")
                     
                     st.divider()
-                    st.markdown("#### 📜 Resumo do Perfil")
-                    st.write(f"Parlamentar foca em: `{', '.join(tokens_deputado[:5]) if tokens_deputado else 'N/A'}`")
+                    st.markdown("#### 📜 Resumo do Perfil (IA)")
+                    st.success(resumo_ia)
 
                 with ci2:
+                    st.markdown("#### 🔓 Tradutor de Politiquês")
+                    if politiques != "N/A":
+                        st.markdown(f"> **Último Projeto Simplicado:**\n> {politiques}")
+                    else:
+                        st.write("Nenhuma ementa recente para traduzir.")
+
                     st.markdown("#### ☁️ Nuvem de Temas Legislativos")
                     if tokens_deputado:
                         fig_wc = generate_wordcloud(tokens_deputado, titulo=f"Eixos de Atuação — {nome_oficial}")
