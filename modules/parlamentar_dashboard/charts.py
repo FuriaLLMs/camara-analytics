@@ -592,7 +592,7 @@ def plot_spending_ranking(df: pd.DataFrame) -> go.Figure:
         text=df_top["total_gasto"].apply(_fmt_brl),
         textposition="inside",
         hovertemplate="<b>%{y}</b><br>Total: <b>%{x:,.2f}</b><br>Notas: %{customdata[0]}<extra></extra>",
-        custom_data=df_top[["num_notas"]]
+        customdata=df_top[["num_notas"]]
     ))
 
     fig.update_layout(
