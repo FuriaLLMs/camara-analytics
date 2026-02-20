@@ -306,8 +306,14 @@ with tab2:
                     frentes = get_frentes_deputado(dep_id)
 
                     st.write("🚨 Auditoria e anomalias...")
-                    df_outliers = detect_outliers(df_desp.rename(columns={"tipoDespesa": "categoria", "valorLiquido": "valor_liquido", "dataDocumento": "data_documento"}))
-                    ceap_status = check_ceap_usage(df_desp.rename(columns={"tipoDespesa": "categoria", "valorLiquido": "valor_liquido", "ano": "ano", "mes": "mes"}), dados_dep.get("siglaUf", "DF"))
+                    df_desp_audit = df_desp.rename(columns={
+                        "tipoDespesa": "categoria", 
+                        "valorLiquido": "valor_liquido", 
+                        "dataDocumento": "data_documento",
+                        "nomeFornecedor": "fornecedor"
+                    })
+                    df_outliers = detect_outliers(df_desp_audit)
+                    ceap_status = check_ceap_usage(df_desp_audit.rename(columns={"ano": "ano", "mes": "mes"}), dados_dep.get("siglaUf", "DF"))
 
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
