@@ -340,8 +340,7 @@ with tab2:
                     total_g = calcular_total_despesas(df_desp)
                     # Bug Hunt: ROI mais informativo para produção zero
                     roi = total_g / qtd_prop if qtd_prop > 0 else 0
-
-                    st.write("🤖 Processando IA Legislativa...")
+                    
                     textos_ementas = [p.get("ementa", "") for p in prop if p.get("ementa")]
                     # Unir ementas para análise de complexidade média
                     texto_completo = " ".join(textos_ementas)
