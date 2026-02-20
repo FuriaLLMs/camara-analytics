@@ -1,8 +1,17 @@
 # 🏛️ Câmara Analytics
 
-> **Sistema Modular de Análise de Dados da Câmara dos Deputados do Brasil**
+<div align="center">
+
+![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
+![Poetry](https://img.shields.io/badge/package%20manager-poetry-blueviolet.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Streamlit](https://img.shields.io/badge/frontend-streamlit-ff4b4b.svg)
+
+**Sistema Modular de Análise de Dados da Câmara dos Deputados do Brasil**
 
 Dashboard interativo e conjunto de ferramentas para analisar dados públicos da Câmara dos Deputados, consumindo a [API de Dados Abertos](https://dadosabertos.camara.leg.br) em tempo real.
+
+</div>
 
 ---
 
@@ -77,32 +86,6 @@ Selecione qualquer deputado e visualize:
 
 **6 métricas de atividade:** Gasto CEAP total · Notas fiscais · Discursos · Eventos · Comissões · Frentes
 
-#### Aba ℹ️ Sobre
-Documentação dos endpoints utilizados e informações sobre os módulos.
-
-### Endpoints da API Utilizados
-
-| Dado | Endpoint |
-|------|----------|
-| Lista de deputados | `GET /deputados` |
-| Perfil completo | `GET /deputados/{id}` |
-| Despesas CEAP | `GET /deputados/{id}/despesas` |
-| Discursos em plenário | `GET /deputados/{id}/discursos` |
-| Participação em eventos | `GET /deputados/{id}/eventos` |
-| Comissões e órgãos | `GET /deputados/{id}/orgaos` |
-| Frentes parlamentares | `GET /deputados/{id}/frentes` |
-| Lista de partidos | `GET /partidos` |
-
-### Cache Inteligente
-
-| Dado | TTL |
-|------|-----|
-| Lista de deputados / partidos | 1 hora |
-| Análises individuais | 30 minutos |
-| Frentes e órgãos | 1 hora |
-
-> Use o botão **🗑️ Limpar Cache** na sidebar para forçar atualização imediata.
-
 ---
 
 ## 💰 Tracker de Gastos (`tracker_gastos`)
@@ -143,16 +126,22 @@ Bot que monitora novas proposições legislativas e envia alertas via **Telegram
 
 ### Configuração
 
+O bot utiliza variáveis de ambiente geridas pelo `python-dotenv`.
+
+1. Obtenha um token com o [@BotFather](https://t.me/botfather).
+2. Obtenha seu Chat ID (pode usar o [@userinfobot](https://t.me/userinfobot)).
+
 ```bash
 # Copie o arquivo de configuração
 cp modules/legis_notifier/.env.example modules/legis_notifier/.env
 
-# Edite com seu token do Telegram
+# Edite o arquivo .env com suas credenciais:
 TELEGRAM_TOKEN=seu_token_aqui
 TELEGRAM_CHAT_ID=seu_chat_id_aqui
 ```
 
 ```bash
+# Execute o monitor
 poetry run python -m modules.legis_notifier.main
 ```
 
@@ -181,39 +170,14 @@ poetry run python -m modules.tema_miner.main
 camara-analytics/
 │
 ├── modules/
-│   ├── parlamentar_dashboard/
-│   │   ├── app.py              # Interface Streamlit principal
-│   │   ├── data_loader.py      # Funções de acesso à API com cache
-│   │   └── charts.py           # Gráficos Plotly (treemap, donut, tabelas)
-│   │
-│   ├── tracker_gastos/
-│   │   ├── main.py
-│   │   ├── extractor.py        # Download das despesas
-│   │   ├── processor.py        # Processamento e agregação
-│   │   └── reporter.py         # Geração de relatórios
-│   │
-│   ├── network_analyst/
-│   │   ├── main.py
-│   │   ├── fetcher.py          # Busca frentes e membros
-│   │   ├── graph_builder.py    # Constrói o grafo de rede
-│   │   └── visualizer.py       # Exporta visualização
-│   │
-│   ├── legis_notifier/
-│   │   ├── main.py
-│   │   ├── monitor.py          # Monitora novas proposições
-│   │   ├── notifier.py         # Envia alertas via Telegram
-│   │   ├── persistence.py      # Salva último ID processado
-│   │   └── .env.example        # Template de configuração
-│   │
-│   └── tema_miner/
-│       ├── main.py
-│       ├── fetcher.py          # Busca proposições
-│       ├── cleaner.py          # Limpa texto das ementas
-│       ├── analyzer.py         # Classifica temas
-│       └── visualizer.py       # Gráficos de temas
+│   ├── parlamentar_dashboard/   # Dashboard Streamlit
+│   ├── tracker_gastos/          # Extração de despesas CEAP
+│   ├── network_analyst/         # Análise de grafos/redes
+│   ├── legis_notifier/          # Monitoramento e bot Telegram
+│   └── tema_miner/              # Classificação NLP de temas
 │
-├── outputs/                    # Arquivos gerados (gitignored)
-├── pyproject.toml              # Dependências Poetry
+├── outputs/                     # Arquivos gerados (gitignored)
+├── pyproject.toml               # Configuração Poetry
 └── README.md
 ```
 
@@ -221,31 +185,36 @@ camara-analytics/
 
 ## 🛠️ Tecnologias
 
-| Biblioteca | Uso |
-|-----------|-----|
-| `streamlit` | Interface web do dashboard |
-| `plotly` | Gráficos interativos (treemap, donut, tabelas) |
-| `pandas` | Manipulação e análise de dados |
-| `requests` | Chamadas HTTP à API da Câmara |
-| `networkx` | Construção de grafos de rede |
-| `python-telegram-bot` | Alertas via Telegram |
+- **Interface:** [Streamlit](https://streamlit.io/)
+- **Visualização:** [Plotly](https://plotly.com/python/), [NetworkX](https://networkx.org/)
+- **Dados:** [Pandas](https://pandas.pydata.org/)
+- **Comunicação:** [Requests](https://requests.readthedocs.io/), [Python Telegram Bot](https://python-telegram-bot.org/)
+
+---
+
+## 🤝 Contribuição
+
+Contribuições são muito bem-vindas!
+
+1. Fork o projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/nova-feature`)
+3. Commit suas mudanças (`git commit -m 'Add: nova feature'`)
+4. Push para a branch (`git push origin feature/nova-feature`)
+5. Abra um Pull Request
 
 ---
 
 ## 🔌 Fonte de Dados
 
 Todos os dados são obtidos diretamente da **API de Dados Abertos da Câmara dos Deputados**:
-
-- 📖 Documentação: https://dadosabertos.camara.leg.br/swagger/api.html
-- 🔗 Base URL: `https://dadosabertos.camara.leg.br/api/v2`
-- ✅ Gratuita e sem necessidade de autenticação
-- 🔄 Atualizada diariamente pela própria Câmara
+- 📖 Documentação: [swagger/api.html](https://dadosabertos.camara.leg.br/swagger/api.html)
+- ✅ Gratuita e sem necessidade de autenticação.
 
 ---
 
 ## 📄 Licença
 
-Este projeto é de uso educacional e de pesquisa. Dados fornecidos pela Câmara dos Deputados sob licença aberta.
+Distribuído sob a licença MIT. Veja `LICENSE` para mais informações (uso educacional e de pesquisa).
 
 ---
 
