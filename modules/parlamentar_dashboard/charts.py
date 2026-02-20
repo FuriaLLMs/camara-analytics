@@ -570,3 +570,93 @@ def plot_frentes_table(frentes: list[dict]) -> go.Figure:
     )
     return fig
 
+
+# ── 10. Ranking Global de Gastos ────────────────────────────────
+def plot_spending_ranking(df: pd.DataFrame) -> go.Figure:
+    """Gráfico de barras horizontal dos maiores gastadores."""
+    if df.empty:
+        return _empty_fig("Ranking indisponível")
+
+    df_top = df.head(15).copy()
+    df_top = df_top.sort_values("total_gasto", ascending=True)
+
+    fig = go.Figure(go.Bar(
+        x=df_top["total_gasto"],
+        y=df_top["nome"],
+        orientation="h",
+        marker=dict(
+            color=df_top["total_gasto"],
+            colorscale="Reds",
+            line=dict(color=BG_CARD, width=1)
+        ),
+        text=df_top["total_gasto"].apply(_fmt_brl),
+        textposition="inside",
+        hovertemplate="<b>%{y}</b><br>Total: <b>%{x:,.2f}</b><br>Notas: %{customdata[0]}<extra></extra>",
+        custom_data=df_top[["num_notas"]]
+    ))
+
+    fig.update_layout(
+        **_layout(height=500),
+        title=dict(text="🏆 Top 15 Maiores Gastos (Ano Selecionado)", x=0),
+        xaxis=dict(title="Total Gasto (R$)", gridcolor=BORDA),
+        yaxis=dict(title="")
+    )
+    return fig
+
+
+# ── 11. Bolhas de Anomalias (Outliers) ─────────────────────────
+def plot_anomaly_bubbles(df_outliers: pd.DataFrame) -> go.Figure:
+    """Gráfico de dispersão evidenciando gastos anômalos."""
+    if df_outliers.empty:
+        return _empty_fig("Nenhuma anomalia estatística detectada (Z-Score < 3.0)")
+
+    fig = px.scatter(
+        df_outliers,
+        x="data_documento" if "data_documento" in df_outliers.columns else "mes",
+        y="valor_liquido",
+        size="z_score",
+        color="categoria",
+        hover_name="fornecedor",
+        title="🚨 Gastos com Desvio Estatístico Alto (Outliers)",
+        template="plotly_dark",
+        color_discrete_sequence=CORES_CATEGORIAS
+    )
+
+    fig.update_layout(**_layout(height=450))
+    fig.update_traces(
+        marker=dict(line=dict(width=1, color=TEXTO)),
+        selector=dict(mode="markers")
+    )
+    return fig
+
+
+# ── 12. Gauge de Limite CEAP ────────────────────────────────────
+def plot_ceap_limit_gauge(total: float, limite: float, uf: str) -> go.Figure:
+    """Velocímetro comparando gasto mensal com limite da UF."""
+    pct = (total / limite) * 100 if limite > 0 else 0
+    cor = VERMELHO if pct > 90 else (AMARELO if pct > 70 else VERDE)
+    
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=total,
+        number={"suffix": " / mês", "font": {"color": cor, "size": 30}},
+        title={"text": f"<b>Limite Cota ({uf})</b>", "font": {"size": 18}},
+        gauge={
+            "axis": {"range": [0, max(limite * 1.1, total * 1.1)], "tickwidth": 1},
+            "bar": {"color": cor},
+            "steps": [
+                {"range": [0, limite * 0.7], "color": "rgba(16, 185, 129, 0.1)"},
+                {"range": [limite * 0.7, limite], "color": "rgba(245, 158, 11, 0.1)"},
+                {"range": [limite, max(limite * 1.1, total * 1.1)], "color": "rgba(239, 68, 68, 0.1)"}
+            ],
+            "threshold": {
+                "line": {"color": "white", "width": 4},
+                "thickness": 0.75,
+                "value": limite
+            }
+        }
+    ))
+
+    fig.update_layout(**_layout(height=280), margin=dict(t=80, b=20, l=30, r=30))
+    return fig
+

@@ -20,6 +20,7 @@ from typing import Optional
 import pandas as pd
 import requests
 import streamlit as st
+from concurrent.futures import ThreadPoolExecutor
 
 BASE_URL = "https://dadosabertos.camara.leg.br/api/v2"
 HEADERS = {
@@ -239,3 +240,43 @@ def calcular_total_despesas(df: pd.DataFrame) -> float:
     if df.empty or "valorLiquido" not in df.columns:
         return 0.0
     return pd.to_numeric(df["valorLiquido"], errors="coerce").fillna(0.0).sum()
+
+
+@st.cache_data(ttl=86400, show_spinner="Construindo Ranking Global (isso pode levar 1-2 minutos)...")
+def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
+    """
+    Busca o total gasto por CADA UM dos 513 deputados no ano especificado.
+    Usa paralelismo para acelerar o processo.
+    """
+    deputados = get_deputados()
+    if not deputados:
+        return pd.DataFrame()
+
+    results = []
+
+    def fetch_spending(dep):
+        # Para o ranking global, pegamos apenas a primeira página de despesas (itens=1)
+        # para obter o total se houver campo 'total' na API, ou apenas pegamos tudo
+        # Mas a API não retorna o total no meta da paginação de forma simples e confiável em todos os casos.
+        # Então faremos uma busca de despesas mas pedindo o mínimo de dados possível
+        # ou pegando a soma.
+        
+        # Estratégia: somar as despesas do deputado
+        # Como queremos o ranking, precisamos dos dados.
+        # Para otimizar, como esta função é cacheada por 24h, vamos fazer o trabalho pesado.
+        df = get_despesas(dep["id"], ano)
+        total = calcular_total_despesas(df)
+        return {
+            "id": dep["id"],
+            "nome": dep["nome"],
+            "siglaPartido": dep["siglaPartido"],
+            "siglaUf": dep["siglaUf"],
+            "total_gasto": total,
+            "num_notas": len(df)
+        }
+
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        results = list(executor.map(fetch_spending, deputados))
+
+    df_ranking = pd.DataFrame(results).sort_values("total_gasto", ascending=False)
+    return df_ranking.reset_index(drop=True)

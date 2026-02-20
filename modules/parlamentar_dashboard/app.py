@@ -20,10 +20,9 @@ from modules.parlamentar_dashboard.data_loader import (
     get_discursos,
     get_eventos,
     get_orgaos,
-    get_frentes_deputado,
-    get_partidos,
     get_ufs,
     calcular_total_despesas,
+    get_ranking_gastos_global,
 )
 from modules.parlamentar_dashboard.charts import (
     plot_despesas_categoria,
@@ -34,6 +33,14 @@ from modules.parlamentar_dashboard.charts import (
     plot_orgaos_table,
     plot_frentes_table,
     plot_gauge_participacao,
+    plot_spending_ranking,
+    plot_anomaly_bubbles,
+    plot_ceap_limit_gauge,
+)
+from modules.tracker_gastos.analyzer import (
+    detect_outliers,
+    check_ceap_usage,
+    analyze_marketing_costs,
 )
 
 # ── Configuração da Página ──────────────────────────────────────
@@ -208,7 +215,12 @@ with st.sidebar:
 
 
 # ══ Abas Principais ═════════════════════════════════════════════
-tab1, tab2, tab3 = st.tabs(["👥 Deputados", "🔍 Análise Individual", "ℹ️ Sobre"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "👥 Deputados", 
+    "🔍 Análise Individual", 
+    "🏆 Rankings & Auditoria",
+    "ℹ️ Sobre"
+])
 
 
 # ─── Aba 1: Lista de Deputados ──────────────────────────────────
@@ -290,6 +302,10 @@ with tab2:
                     st.write("🏳️ Frentes parlamentares...")
                     frentes = get_frentes_deputado(dep_id)
 
+                    st.write("🚨 Auditoria e anomalias...")
+                    df_outliers = detect_outliers(df_desp.rename(columns={"tipoDespesa": "categoria", "valorLiquido": "valor_liquido", "dataDocumento": "data_documento"}))
+                    ceap_status = check_ceap_usage(df_desp.rename(columns={"tipoDespesa": "categoria", "valorLiquido": "valor_liquido", "ano": "ano", "mes": "mes"}), dados_dep.get("siglaUf", "DF"))
+
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
                 st.session_state.analise_feita = True
@@ -298,6 +314,7 @@ with tab2:
                     "detalhes": detalhes, "df_desp": df_desp,
                     "df_disc": df_disc, "df_eventos": df_eventos,
                     "orgaos": orgaos, "frentes": frentes, "ano": ano,
+                    "outliers": df_outliers, "ceap": ceap_status
                 }
             else:
                 d = st.session_state.analise_dados
@@ -307,6 +324,8 @@ with tab2:
                 df_eventos = d["df_eventos"]
                 orgaos     = d["orgaos"]
                 frentes    = d["frentes"]
+                df_outliers = d.get("outliers", pd.DataFrame())
+                ceap_status = d.get("ceap", {})
                 ano        = d.get("ano", ano_atual - 1)
 
             # ── Perfil ────────────────────────────────────────
@@ -432,9 +451,56 @@ with tab2:
                     width="stretch",
                 )
 
+            # ── Seção de Auditoria (Novidade V2.0) ────────────
+            st.divider()
+            col_a1, col_a2 = st.columns([2, 1])
+            with col_a1:
+                st.plotly_chart(plot_anomaly_bubbles(df_outliers), use_container_width=True)
+            with col_a2:
+                if ceap_status:
+                    st.plotly_chart(
+                        plot_ceap_limit_gauge(ceap_status["total"], ceap_status["limite"], dados_dep.get("siglaUf", "??")),
+                        use_container_width=True
+                    )
+                    if ceap_status["excedeu"]:
+                        st.error(f"⚠️ **ALERTA**: O parlamentar excedeu o limite mensal da UF ({ceap_status['percentual']}% do teto).")
+                    elif ceap_status["percentual"] > 80:
+                        st.warning(f"🔔 **Atenção**: Gasto próximo ao limite mensal ({ceap_status['percentual']}%).")
 
-# ─── Aba 3: Sobre ───────────────────────────────────────────────
+
+# ─── Aba 3: Rankings & Auditoria Global ────────────────────────
 with tab3:
+    st.subheader("🏆 Rankings Globais e Auditoria da Casa")
+    ano_sel_rank = st.selectbox("Escolha o ano para o ranking", options=[2024, 2023, 2022], index=1)
+    
+    with st.spinner("Compilando dados de todos os 513 deputados..."):
+        df_rank = get_ranking_gastos_global(ano_sel_rank)
+    
+    if df_rank.empty:
+        st.info("Dados não disponíveis para este ano.")
+    else:
+        c1, c2, c3 = st.columns(3)
+        total_casa = df_rank["total_gasto"].sum()
+        c1.metric("💰 Total Gasto pela Câmara", f"R$ {total_casa/1e6:.1f}M")
+        c2.metric("👤 Média por Deputado", f"R$ {(total_casa/513)/1e3:.1f}k")
+        top_g = df_rank.iloc[0]["total_gasto"]
+        c3.metric("📈 Maior Gasto Individual", f"R$ {top_g/1e3:.1f}k", help=f"Responsável: {df_rank.iloc[0]['nome']}")
+
+        st.divider()
+        col_r1, col_r2 = st.columns([2, 1])
+        with col_r1:
+            st.plotly_chart(plot_spending_ranking(df_rank), use_container_width=True)
+        with col_r2:
+            st.markdown("### 📋 Top 10 Gastadores")
+            st.dataframe(
+                df_rank[["nome", "siglaPartido", "total_gasto"]].head(10).style.format({"total_gasto": "R$ {:,.2f}"}),
+                hide_index=True,
+                use_container_width=True
+            )
+
+
+# ─── Aba 4: Sobre ───────────────────────────────────────────────
+with tab4:
     st.subheader("ℹ️ Sobre o Câmara Analytics")
     col_a, col_b = st.columns(2)
     with col_a:
