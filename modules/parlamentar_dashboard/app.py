@@ -386,6 +386,13 @@ with tab2:
             st.divider()
 
             # ── Métricas de atividade ─────────────────────────
+            total_desp = calcular_total_despesas(df_desp)
+            total_notas = len(df_desp)
+            total_disc = len(df_disc)
+            total_eventos = len(df_eventos)
+            total_orgaos = len(orgaos)
+            total_frentes = len(frentes)
+
             st.divider()
 
             # Bug Hunt: Layout métricas (3x2 em telas pequenas é melhor do que 6 columns)
