@@ -487,8 +487,9 @@ def plot_orgaos_table(orgaos: list[dict]) -> go.Figure:
     # Highlight linha ainda ativa (sem dataFim)
     n = len(df_disp)
     is_active = df["dataFim"].isna() if "dataFim" in df.columns else [False] * n
+    AZUL_ALPHA = "rgba(59,130,246,0.20)"  # #3B82F6 com 20% de opacidade
     fill = [
-        [AZUL + "33" if is_active.iloc[i] else (BG_PLOT if i % 2 == 0 else BG_CARD)
+        [AZUL_ALPHA if is_active.iloc[i] else (BG_PLOT if i % 2 == 0 else BG_CARD)
          for i in range(n)]
         for _ in df_disp.columns
     ]
