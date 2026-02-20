@@ -342,9 +342,6 @@ with tab2:
                     roi = total_g / qtd_prop if qtd_prop > 0 else 0
 
                     st.write("🤖 Processando IA Legislativa...")
-                    # DEBUG: Verificar o que o Streamlit está vendo
-                    st.write(f"🔍 DEBUG Metodos: {[m for m in dir(AICore) if not m.startswith('__')]}")
-                    
                     textos_ementas = [p.get("ementa", "") for p in prop if p.get("ementa")]
                     # Unir ementas para análise de complexidade média
                     texto_completo = " ".join(textos_ementas)
@@ -355,11 +352,11 @@ with tab2:
                     resumo_ia = AICore.sumarizar_perfil_llm(tokens_deputado)
                     
                     primeira_ementa = textos_ementas[0] if textos_ementas else ""
-                    politiques_traduzido = AICore.traduzir_politiques(primeira_ementa)
+                    politiques = AICore.traduzir_politiques(primeira_ementa)
                     
                     # Sentimento - Pegar o discurso mais recente
                     ultimo_discurso = df_disc.iloc[0]["transcricao"] if not df_disc.empty else ""
-                    sentimento_ia = AICore.analisar_sentimento_llm(ultimo_discurso)
+                    sentimento = AICore.analisar_sentimento_llm(ultimo_discurso)
 
                     status.update(label="✅ Dados carregados!", state="complete", expanded=False)
 
@@ -374,8 +371,8 @@ with tab2:
                     "complexidade": complexidade,
                     "tokens": tokens_deputado,
                     "resumo_ia": resumo_ia,
-                    "politiques": politiques_traduzido,
-                    "sentimento": sentimento_ia
+                    "politiques": politiques,
+                    "sentimento": sentimento
                 }
             else:
                 d = st.session_state.analise_dados
