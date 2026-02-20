@@ -619,13 +619,25 @@ def plot_anomaly_bubbles(df_outliers: pd.DataFrame) -> go.Figure:
         hover_name="fornecedor",
         title="🚨 Gastos com Desvio Estatístico Alto (Outliers)",
         template="plotly_dark",
-        color_discrete_sequence=CORES_CATEGORIAS
+        color_discrete_sequence=CORES_CATEGORIAS,
+        labels={
+            "valor_liquido": "Valor (R$)",
+            "data_documento": "Data",
+            "mes": "Mês",
+            "categoria": "Categoria",
+            "z_score": "Intensidade do Desvio"
+        }
     )
 
-    fig.update_layout(**_layout(height=450))
     fig.update_traces(
         marker=dict(line=dict(width=1, color=TEXTO)),
-        selector=dict(mode="markers")
+        selector=dict(mode="markers"),
+        hovertemplate="<b>%{hovertext}</b><br>Valor: R$ %{y:,.2f}<br>Desvio: %{marker.size:.1f}σ<extra></extra>"
+    )
+    
+    fig.update_layout(
+        **_layout(height=450),
+        legend=dict(title_text="Categorias de Gastos", orientation="h", y=-0.2)
     )
     return fig
 
@@ -639,15 +651,24 @@ def plot_ceap_limit_gauge(total: float, limite: float, uf: str) -> go.Figure:
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=total,
-        number={"suffix": " / mês", "font": {"color": cor, "size": 30}},
-        title={"text": f"<b>Limite Cota ({uf})</b>", "font": {"size": 18}},
+        number={
+            "suffix": " / mês", 
+            "font": {"color": cor, "size": 32},
+            "valueformat": ",.2f"
+        },
+        title={"text": f"<b>Limite Cota ({uf})</b>", "font": {"size": 20}},
         gauge={
-            "axis": {"range": [0, max(limite * 1.1, total * 1.1)], "tickwidth": 1},
+            "axis": {
+                "range": [0, max(limite * 1.1, total * 1.1)], 
+                "tickwidth": 1, 
+                "tickformat": ",.0f",
+                "tickprefix": "R$ "
+            },
             "bar": {"color": cor},
             "steps": [
-                {"range": [0, limite * 0.7], "color": "rgba(16, 185, 129, 0.1)"},
-                {"range": [limite * 0.7, limite], "color": "rgba(245, 158, 11, 0.1)"},
-                {"range": [limite, max(limite * 1.1, total * 1.1)], "color": "rgba(239, 68, 68, 0.1)"}
+                {"range": [0, limite * 0.7], "color": "rgba(16, 185, 129, 0.15)"},
+                {"range": [limite * 0.7, limite], "color": "rgba(245, 158, 11, 0.15)"},
+                {"range": [limite, max(limite * 1.1, total * 1.1)], "color": "rgba(239, 68, 68, 0.15)"}
             ],
             "threshold": {
                 "line": {"color": "white", "width": 4},
@@ -657,6 +678,9 @@ def plot_ceap_limit_gauge(total: float, limite: float, uf: str) -> go.Figure:
         }
     ))
 
-    fig.update_layout(**_layout(height=280, margin=dict(t=80, b=20, l=30, r=30)))
+    fig.update_layout(
+        **_layout(height=320, margin=dict(t=100, b=20, l=40, r=40)),
+        title=dict(text="") # Forçar título vazio para evitar "undefined"
+    )
     return fig
 
