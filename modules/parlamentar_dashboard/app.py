@@ -288,6 +288,7 @@ with tab2:
                 with st.status("Carregando dados do parlamentar...", expanded=True) as status:
                     st.write("📄 Dados cadastrais...")
                     detalhes = get_deputado_detail(dep_id)
+                    dados_dep = detalhes.get("ultimoStatus", {}) if detalhes else {}
 
                     st.write(f"💰 Despesas CEAP ({ano})...")
                     df_desp = get_despesas(dep_id, ano)
@@ -331,7 +332,6 @@ with tab2:
                 ano        = d.get("ano", ano_atual - 1)
 
             # ── Perfil ────────────────────────────────────────
-            dados_dep = detalhes.get("ultimoStatus", {}) if detalhes else {}
 
             col_foto, col_info = st.columns([1, 4])
             with col_foto:
