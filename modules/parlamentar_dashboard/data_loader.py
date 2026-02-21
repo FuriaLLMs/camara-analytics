@@ -271,8 +271,27 @@ def calcular_total_despesas(df: pd.DataFrame) -> float:
 def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
     """
     Busca o total gasto e a produção legislativa por CADA UM dos 513 deputados.
-    Calcula o ROI Legislativo (R$ por Proposição).
+    Usa cache persistente em disco (24h) para evitar 1026 chamadas de API a cada reload.
     """
+    import os
+    from pathlib import Path
+    from datetime import datetime, timedelta
+
+    # ── Cache em disco ────────────────────────────────────────────────
+    CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_file = CACHE_DIR / f"ranking_global_{ano}.parquet"
+    TTL_HORAS = 24
+
+    if cache_file.exists():
+        age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
+        if age < timedelta(hours=TTL_HORAS):
+            try:
+                return pd.read_parquet(cache_file)
+            except Exception:
+                pass  # cache corrompido — recalcula
+
+    # ── Busca ao vivo ─────────────────────────────────────────────────
     deputados = get_deputados()
     if not deputados:
         return pd.DataFrame()
@@ -280,32 +299,40 @@ def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
     results = []
 
     def fetch_data(dep):
-        # 1. Gastos
-        df_desp = get_despesas(dep["id"], ano)
-        total_gasto = calcular_total_despesas(df_desp)
-        
-        # 2. Produção Legislativa
-        proposicoes = get_proposicoes(dep["id"], ano)
-        qtd_prop = len(proposicoes)
-        
-        # 3. Cálculo de Eficiência (ROI)
-        # Se qtd_prop for 0, o custo é considerado o total gasto (pior caso)
-        # mas marcamos com um valor alto para o ranking
-        custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else float('inf')
+        try:
+            df_desp = get_despesas(dep["id"], ano)
+            total_gasto = calcular_total_despesas(df_desp)
+            proposicoes = get_proposicoes(dep["id"], ano)
+            qtd_prop = len(proposicoes)
+            custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else float('inf')
+            return {
+                "id":                  dep["id"],
+                "nome":                dep["nome"],
+                "siglaPartido":        dep["siglaPartido"],
+                "siglaUf":             dep["siglaUf"],
+                "total_gasto":         total_gasto,
+                "num_notas":           len(df_desp),
+                "qtd_proposicoes":     qtd_prop,
+                "custo_por_proposicao": custo_por_prop,
+            }
+        except Exception:
+            # Não deixa um deputado com erro travar o ranking inteiro
+            return None
 
-        return {
-            "id": dep["id"],
-            "nome": dep["nome"],
-            "siglaPartido": dep["siglaPartido"],
-            "siglaUf": dep["siglaUf"],
-            "total_gasto": total_gasto,
-            "num_notas": len(df_desp),
-            "qtd_proposicoes": qtd_prop,
-            "custo_por_proposicao": custo_por_prop
-        }
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        raw = list(executor.map(fetch_data, deputados))
 
-    with ThreadPoolExecutor(max_workers=10) as executor:  # Reduzido para 10 para evitar Rate Limit
-        results = list(executor.map(fetch_data, deputados))
+    results = [r for r in raw if r is not None]
+    if not results:
+        return pd.DataFrame()
 
     df_ranking = pd.DataFrame(results).sort_values("total_gasto", ascending=False)
-    return df_ranking.reset_index(drop=True)
+    df_ranking = df_ranking.reset_index(drop=True)
+
+    # Salva cache
+    try:
+        df_ranking.to_parquet(cache_file, index=False)
+    except Exception:
+        pass
+
+    return df_ranking

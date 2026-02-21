@@ -609,7 +609,7 @@ def main_federal():
         st.subheader("🏆 Rankings Globais e Auditoria da Casa")
         ano_sel_rank = st.selectbox("Escolha o ano para o ranking", options=anos_disponiveis, index=1)
         
-        with st.spinner("Compilando dados de todos os 513 deputados..."):
+        with st.spinner("Carregando ranking... (1ª vez do dia leva 2-3 min — depois é instantâneo via cache 💾)"):
             df_rank = get_ranking_gastos_global(ano_sel_rank)
         
         if df_rank.empty:
