@@ -692,7 +692,7 @@ def main_federal():
 def main_municipal():
     """Painel Legislativo da Câmara Municipal de Florianópolis."""
     tab1, tab2, tab3 = st.tabs([
-        "👥 Vereadores", 
+        "👥 Servidores Públicos", 
         "📋 Pautas e Sessões", 
         "📺 TV Câmara & Notícias"
     ])
@@ -704,7 +704,7 @@ def main_municipal():
 
         veredadores = loader_mun.get_vereadores()
         if not veredadores:
-            st.warning("Não foi possível carregar a lista de vereadores.")
+            st.warning("Não foi possível carregar a lista de servidores públicos.")
         else:
             COR_PARTIDO = {
                 "PT": "#E53E3E", "PL": "#2B6CB0", "MDB": "#D69E2E",
@@ -793,14 +793,14 @@ def main_municipal():
                         linkify   = f" — [🔗 ler]({link_n})" if link_n else ""
                         st.markdown(f"📰 `{data_n}` {titulo_n}{linkify}")
                 else:
-                    st.info("Nenhuma notícia recente encontrada com o nome deste vereador.")
+                    st.info("Nenhuma notícia recente encontrada com o nome deste servidor público.")
 
             # ════════════════════════════════════════════════════════
             # MODO GRID: lista todos os vereadores em cards clicáveis
             # ════════════════════════════════════════════════════════
             else:
-                st.subheader("Vereadores de Florianópolis")
-                st.metric("👥 Total de Vereadores", len(veredadores))
+                st.subheader("Servidores Públicos de Florianópolis")
+                st.metric("👥 Total de Servidores", len(veredadores))
                 st.divider()
 
                 cols = st.columns(4)
