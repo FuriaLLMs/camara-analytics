@@ -713,43 +713,60 @@ def main_municipal():
         if not pautas:
             st.info("Nenhuma pauta recente encontrada.")
         else:
-            for p in pautas[:10]:
-                data_fmt = p.get("data") or p.get("dataSessao") or "Sessão"
-                titulo = p.get("titulo") or p.get("descricaoTipo") or p.get("nome") or "Sem Título"
+            # Dicionário de Comissões da CMF-Florianópolis
+            COMISSOES_CMF = {
+                "CCJ":      ("Constituição e Justiça",                       "Analisa a constitucionalidade e legalidade de propostas de lei."),
+                "CECD":     ("Educação, Cultura e Desporto",                   "Discute ensino, projetos culturais e programas esportivos no município."),
+                "CDDPD":    ("Direitos das Pessoas com Deficiência",           "Analisa políticas de acessibilidade, inclusão e direitos de PcD."),
+                "CDDMPIG":  ("Direitos das Mulheres e Inclusão de Gênero",    "Pauta políticas para igualdade de gênero e proteção à mulher."),
+                "CTLSSP":   ("Turismo, Lazer, Segurança e Serviço Público",  "Debute turismo sustentável, segurança pública e serviços ao cidadão."),
+                "CCTOII":   ("Ciência, Tecnologia, Obras e Infraestrutura",   "Pauta inovação, obras públicas e desenvolvimento de infraestrutura."),
+                "CVOPU":    ("Vigilância, Obras Públicas e Urbanismo",        "Fiscaliza obras públicas e discute planejamento urbano da cidade."),
+                "CS":       ("Saúde",                                          "Debate saúde pública: UBSs, hospitais, vigilância sanitária."),
+                "CF":       ("Finanças",                                       "Analisa o orçamento municipal, tributos e contas públicas."),
+                "CMMA":     ("Meio Ambiente",                                   "Discusses preservação ambiental, saneamento e fauna urbana."),
+                "CMH":      ("Habitação",                                      "Analisa projetos de moradia, regularização fundiária e PMCMV."),
+                "CTA":      ("Transporte e Acessibilidade",                    "Debate mobilidade urbana, transporte coletivo e ciclovias."),
+            }
+            TIPO_SESSAO = {
+                "Audiência Pública":             ("🎙️", "Sessão aberta à participação cidadã. Qualquer pessoa pode se inscrever para falar."),
+                "Sessão Ordinária":              ("🏗️", "Sessão regular do plenário para votação de projetos de lei e deliberações."),
+                "Sessão Extraordinária":         ("⚡", "Convocada fora do calendário regular para pautas urgentes."),
+                "Reunião Ordinária de Comissão": ("📋", "Reunião técnica de comissão para análise detalhada de propostas."),
+                "Reunião Extraordinária de Comissão": ("⚡📋", "Reunião de comissão fora do calendário por urgência."),
+            }
 
-                # Tenta múltiplos nomes de campo para descrição/conteúdo
-                descricao = (
-                    p.get("descricao") or p.get("ementa") or
-                    p.get("observacao") or p.get("pauta") or
-                    p.get("resumo") or p.get("conteudo")
-                )
+            import re as _re
 
-                # Alguns campos podem ser listas (itens da pauta)
-                proposicoes = p.get("proposicoes") or p.get("itens") or p.get("documentos")
-                link = p.get("url") or p.get("link") or p.get("urlPauta") or ""
-
-                with st.expander(f"📅 {data_fmt} — {titulo}"):
-                    if descricao:
-                        st.write(descricao)
-                    elif proposicoes and isinstance(proposicoes, list):
-                        st.markdown("**Proposições em pauta:**")
-                        for item in proposicoes:
-                            if isinstance(item, dict):
-                                n_txt = item.get("numero") or item.get("titulo") or str(item)
-                                st.markdown(f"• {n_txt}")
-                            else:
-                                st.markdown(f"• {item}")
+            def _resumo_pauta(titulo: str) -> tuple:
+                icone, tipo_desc = "📋", ""
+                for tipo, (ico, desc) in TIPO_SESSAO.items():
+                    if tipo.lower() in titulo.lower():
+                        icone, tipo_desc = ico, desc
+                        break
+                match = _re.search(r'\(([A-Z]{2,10})\)', titulo)
+                comissao_txt = ""
+                if match:
+                    sigla = match.group(1)
+                    if sigla in COMISSOES_CMF:
+                        nome, desc_c = COMISSOES_CMF[sigla]
+                        comissao_txt = f"**Comissão:** {nome} `({sigla})`  —  {desc_c}"
                     else:
-                        # Mostra os campos disponíveis para encontrar o correto
-                        campos_com_valor = {k: v for k, v in p.items() if v and k not in ("data", "titulo", "dataSessao")}
-                        if campos_com_valor:
-                            for campo, valor in campos_com_valor.items():
-                                st.markdown(f"**{campo}:** {valor}")
-                        else:
-                            st.caption("A API não retornou detalhes adicionais para esta sessão.")
+                        comissao_txt = f"**Comissão:** `{sigla}`"
+                resumo = comissao_txt
+                if tipo_desc:
+                    resumo += ("\n\n" if comissao_txt else "") + f"_{tipo_desc}_"
+                return icone, resumo or "🏗️ Sessão legislativa da Câmara Municipal de Florianópolis."
 
+            for p in pautas[:15]:
+                data_fmt = p.get("data") or p.get("dataSessao") or "Data não informada"
+                titulo = p.get("titulo") or p.get("nome") or "Sem Título"
+                link = p.get("url") or p.get("link") or p.get("urlPauta") or ""
+                icone, resumo = _resumo_pauta(titulo)
+                with st.expander(f"{icone} {data_fmt} — {titulo}"):
+                    st.markdown(resumo)
                     if link:
-                        st.markdown(f"[📄 Ver pauta completa]({link})", unsafe_allow_html=False)
+                        st.markdown(f"[📄 Ver proposições em pauta]({link})")
 
     with tab3:
         st.subheader("Últimas Notícias e Vídeos")
