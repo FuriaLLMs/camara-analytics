@@ -608,10 +608,25 @@ def main_federal():
     with tab3:
         st.subheader("🏆 Rankings Globais e Auditoria da Casa")
         ano_sel_rank = st.selectbox("Escolha o ano para o ranking", options=anos_disponiveis, index=1)
-        
-        with st.spinner("Carregando ranking... (1ª vez do dia leva 2-3 min — depois é instantâneo via cache 💾)"):
+
+        # Verifica se já tem cache em disco — se sim, carrega direto; se não, exige clique
+        from pathlib import Path as _PathR
+        _cache_dir  = _PathR(__file__).parent.parent.parent / "data" / "cache"
+        _cache_file = _cache_dir / f"ranking_global_{ano_sel_rank}.parquet"
+        _tem_cache  = _cache_file.exists()
+
+        if not _tem_cache:
+            st.info(
+                "⚙️ **Ranking não calculado ainda para este ano.**\n\n"
+                "A geração inicial busca dados de todos os 513 deputados (≈ 2-3 min). "
+                "Após a primeira vez, o resultado fica em cache e carrega instantaneamente."
+            )
+            if not st.button("🚀 Gerar Ranking Agora", type="primary", key="btn_gerar_ranking"):
+                st.stop()
+
+        with st.spinner("Carregando ranking... 💾"):
             df_rank = get_ranking_gastos_global(ano_sel_rank)
-        
+
         if df_rank.empty:
             st.info("Dados não disponíveis para este ano.")
         else:
