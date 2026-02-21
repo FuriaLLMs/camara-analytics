@@ -279,7 +279,7 @@ def calcular_total_despesas(df: pd.DataFrame) -> float:
     return float(series.sum())
 
 
-@st.cache_data(ttl=86400, show_spinner="Construindo Ranking de Eficiência Global (isso pode levar 2-3 minutos)...")
+
 def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
     """
     Busca o total gasto e a produção legislativa por CADA UM dos 513 deputados.
