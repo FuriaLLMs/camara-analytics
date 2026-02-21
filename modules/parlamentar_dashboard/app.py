@@ -698,12 +698,14 @@ def main_municipal():
     ])
     
     with tab1:
-        st.subheader("Vereadores de Florianópolis")
+        # ── Inicializa estado de navegação ────────────────────────
+        if "vereador_sel" not in st.session_state:
+            st.session_state.vereador_sel = None
+
         veredadores = loader_mun.get_vereadores()
         if not veredadores:
             st.warning("Não foi possível carregar a lista de vereadores.")
         else:
-            # Cores por partido
             COR_PARTIDO = {
                 "PT": "#E53E3E", "PL": "#2B6CB0", "MDB": "#D69E2E",
                 "PSD": "#2F855A", "PSOL": "#6B46C1", "PP": "#C05621",
@@ -711,45 +713,132 @@ def main_municipal():
                 "SOLIDARIEDADE": "#D97706", "UNIÃO": "#0F766E",
             }
 
-            st.metric("👥 Total de Vereadores", len(veredadores))
-            st.divider()
-
-            # Grid 4 colunas
-            cols = st.columns(4)
-            for i, v in enumerate(veredadores):
+            # ════════════════════════════════════════════════════════
+            # MODO DETALHE: exibe perfil completo do vereador selecionado
+            # ════════════════════════════════════════════════════════
+            if st.session_state.vereador_sel is not None:
+                v = st.session_state.vereador_sel
                 nome    = v.get("nome") or v.get("nomeVereador") or "N/A"
                 partido = (v.get("partido") or v.get("siglaPartido") or "—").upper()
                 funcao  = v.get("funcao") or v.get("cargo") or "Vereador(a)"
                 foto    = v.get("imagem") or v.get("urlFoto") or v.get("foto") or ""
-                link    = v.get("link") or v.get("url") or "#"
-
+                link    = v.get("link") or v.get("url") or ""
                 cor     = COR_PARTIDO.get(partido, "#4A5568")
 
-                with cols[i % 4]:
-                    # Card HTML estilizado
-                    foto_html = (
-                        f"<img src='{foto}' style='width:80px;height:80px;border-radius:50%;"
-                        f"object-fit:cover;border:3px solid {cor};margin-bottom:8px;display:block;margin-left:auto;margin-right:auto'>"
-                        if foto else
-                        f"<div style='width:80px;height:80px;border-radius:50%;background:{cor};"
-                        f"display:flex;align-items:center;justify-content:center;font-size:28px;"
-                        f"margin:0 auto 8px auto'>👤</div>"
+                # Botão de voltar
+                if st.button("← Voltar à lista", key="btn_voltar_vereador"):
+                    st.session_state.vereador_sel = None
+                    st.rerun()
+
+                st.divider()
+
+                # ── Header do perfil ──────────────────────────────
+                col_foto, col_info = st.columns([1, 3])
+                with col_foto:
+                    if foto:
+                        st.markdown(
+                            f"<img src='{foto}' style='width:160px;height:160px;border-radius:50%;"
+                            f"object-fit:cover;border:4px solid {cor};display:block;margin:0 auto'>",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            f"<div style='width:160px;height:160px;border-radius:50%;background:{cor};"
+                            f"display:flex;align-items:center;justify-content:center;font-size:56px;"
+                            f"margin:0 auto'>👤</div>",
+                            unsafe_allow_html=True
+                        )
+
+                with col_info:
+                    st.markdown(f"## {nome}")
+                    st.markdown(
+                        f"<span style='background:{cor};color:white;font-size:14px;font-weight:700;"
+                        f"padding:4px 14px;border-radius:20px'>{partido}</span>",
+                        unsafe_allow_html=True
                     )
-                    st.markdown(f"""
-                    <div style='background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;
-                        padding:16px 12px;text-align:center;margin-bottom:12px;
-                        transition:transform 0.2s'>
-                        {foto_html}
-                        <div style='font-weight:700;font-size:14px;color:#F7FAFC;
-                            margin-bottom:4px;white-space:nowrap;overflow:hidden;
-                            text-overflow:ellipsis' title='{nome}'>{nome}</div>
-                        <span style='background:{cor};color:white;font-size:11px;
-                            font-weight:700;padding:2px 8px;border-radius:20px;
-                            display:inline-block;margin-bottom:4px'>{partido}</span>
-                        <div style='color:#A0AEC0;font-size:12px'>{funcao}</div>
-                        {"<a href='" + link + "' target='_blank' style='color:#63B3ED;font-size:11px;text-decoration:none'>🔗 Perfil CMF</a>" if link and link != "#" else ""}
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.markdown(f"**Cargo:** {funcao}")
+                    st.markdown(f"**Câmara:** Câmara Municipal de Florianópolis (CMF-SC)")
+                    if link:
+                        st.link_button("🏛️ Ver perfil oficial na CMF", link)
+
+                st.divider()
+
+                # ── Proposições do vereador (busca por nome) ──────
+                st.markdown("### 📋 Proposições Legislativas")
+                with st.spinner("Buscando proposições..."):
+                    todas_prop = loader_mun.get_pautas()  # proxy — pautas relacionadas
+                    prop_rel = [p for p in todas_prop if nome.split()[0].lower() in str(p).lower()]
+
+                if prop_rel:
+                    for pr in prop_rel[:5]:
+                        titulo_pr = pr.get("titulo") or pr.get("nome") or "Proposição"
+                        data_pr   = pr.get("data") or ""
+                        st.markdown(f"📄 `{data_pr}` — {titulo_pr}")
+                else:
+                    st.info("Nenhuma proposição diretamente vinculada encontrada pela API. Veja o perfil oficial para a lista completa.")
+
+                # ── Notícias recentes com nome ─────────────────────
+                st.divider()
+                st.markdown("### 📰 Notícias Recentes")
+                with st.spinner("Buscando notícias..."):
+                    noticias_all = loader_mun.get_noticias()
+                    nome_busca = nome.split()[0].lower()
+                    noticias_rel = [n for n in noticias_all if nome_busca in str(n).lower()]
+
+                if noticias_rel:
+                    for n in noticias_rel[:5]:
+                        data_n    = n.get("data") or ""
+                        titulo_n  = n.get("titulo") or n.get("descricao") or "Notícia"
+                        link_n    = n.get("link") or n.get("url") or ""
+                        linkify   = f" — [🔗 ler]({link_n})" if link_n else ""
+                        st.markdown(f"📰 `{data_n}` {titulo_n}{linkify}")
+                else:
+                    st.info("Nenhuma notícia recente encontrada com o nome deste vereador.")
+
+            # ════════════════════════════════════════════════════════
+            # MODO GRID: lista todos os vereadores em cards clicáveis
+            # ════════════════════════════════════════════════════════
+            else:
+                st.subheader("Vereadores de Florianópolis")
+                st.metric("👥 Total de Vereadores", len(veredadores))
+                st.divider()
+
+                cols = st.columns(4)
+                for i, v in enumerate(veredadores):
+                    nome    = v.get("nome") or v.get("nomeVereador") or "N/A"
+                    partido = (v.get("partido") or v.get("siglaPartido") or "—").upper()
+                    funcao  = v.get("funcao") or v.get("cargo") or "Vereador(a)"
+                    foto    = v.get("imagem") or v.get("urlFoto") or v.get("foto") or ""
+                    cor     = COR_PARTIDO.get(partido, "#4A5568")
+
+                    with cols[i % 4]:
+                        foto_html = (
+                            f"<img src='{foto}' style='width:80px;height:80px;border-radius:50%;"
+                            f"object-fit:cover;border:3px solid {cor};margin-bottom:8px;"
+                            f"display:block;margin-left:auto;margin-right:auto'>"
+                            if foto else
+                            f"<div style='width:80px;height:80px;border-radius:50%;background:{cor};"
+                            f"display:flex;align-items:center;justify-content:center;font-size:28px;"
+                            f"margin:0 auto 8px auto'>👤</div>"
+                        )
+                        st.markdown(f"""
+                        <div style='background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;
+                            padding:16px 12px;text-align:center;margin-bottom:4px'>
+                            {foto_html}
+                            <div style='font-weight:700;font-size:14px;color:#F7FAFC;
+                                margin-bottom:4px;white-space:nowrap;overflow:hidden;
+                                text-overflow:ellipsis' title='{nome}'>{nome}</div>
+                            <span style='background:{cor};color:white;font-size:11px;
+                                font-weight:700;padding:2px 8px;border-radius:20px;
+                                display:inline-block;margin-bottom:4px'>{partido}</span>
+                            <div style='color:#A0AEC0;font-size:12px'>{funcao}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        # Botão Streamlit sobreposto ao card
+                        if st.button("👁️ Ver perfil", key=f"ver_{i}", use_container_width=True):
+                            st.session_state.vereador_sel = v
+                            st.rerun()
 
     with tab2:
         st.subheader("Pautas das Próximas Sessões")
