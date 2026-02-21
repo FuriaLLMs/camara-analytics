@@ -612,11 +612,17 @@ def plot_anomaly_bubbles(df_outliers: pd.DataFrame) -> go.Figure:
     if df_outliers.empty:
         return _empty_fig("Nenhuma anomalia estatística detectada (Z-Score < 3.0)")
 
+    df_plot = df_outliers.copy()
+    
+    # Bug Hunt: Plotly não aceita marker.size negativo. 
+    # Mapeamos magnitude visual (tamanho) para o valor absoluto do desvio.
+    df_plot["intensidade_desvio"] = df_plot["z_score"].abs()
+
     fig = px.scatter(
-        df_outliers,
-        x="data_documento" if "data_documento" in df_outliers.columns else "mes",
+        df_plot,
+        x="data_documento" if "data_documento" in df_plot.columns else "mes",
         y="valor_liquido",
-        size="z_score",
+        size="intensidade_desvio",
         color="categoria",
         hover_name="fornecedor",
         title="🚨 Gastos com Desvio Estatístico Alto (Outliers)",
@@ -627,14 +633,16 @@ def plot_anomaly_bubbles(df_outliers: pd.DataFrame) -> go.Figure:
             "data_documento": "Data",
             "mes": "Mês",
             "categoria": "Categoria",
-            "z_score": "Intensidade do Desvio"
-        }
+            "intensidade_desvio": "Magnitude do Desvio"
+        },
+        custom_data=["z_score"] # Mantemos o valor real (com sinal) para o hover
     )
 
     fig.update_traces(
         marker=dict(line=dict(width=1, color=TEXTO)),
         selector=dict(mode="markers"),
-        hovertemplate="<b>%{hovertext}</b><br>Valor: R$ %{y:,.2f}<br>Desvio: %{marker.size:.1f}σ<extra></extra>"
+        # Mostramos o z-score real (com sinal) no hover para precisão acadêmica
+        hovertemplate="<b>%{hovertext}</b><br>Valor: R$ %{y:,.2f}<br>Desvio: %{customdata[0]:.1f}σ<extra></extra>"
     )
     
     fig.update_layout(
