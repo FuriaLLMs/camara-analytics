@@ -714,8 +714,42 @@ def main_municipal():
             st.info("Nenhuma pauta recente encontrada.")
         else:
             for p in pautas[:10]:
-                with st.expander(f"📅 {p.get('data', 'Sessão')} - {p.get('titulo', 'Sem Título')}"):
-                    st.write(p.get("descricao", "Sem descrição disponível."))
+                data_fmt = p.get("data") or p.get("dataSessao") or "Sessão"
+                titulo = p.get("titulo") or p.get("descricaoTipo") or p.get("nome") or "Sem Título"
+
+                # Tenta múltiplos nomes de campo para descrição/conteúdo
+                descricao = (
+                    p.get("descricao") or p.get("ementa") or
+                    p.get("observacao") or p.get("pauta") or
+                    p.get("resumo") or p.get("conteudo")
+                )
+
+                # Alguns campos podem ser listas (itens da pauta)
+                proposicoes = p.get("proposicoes") or p.get("itens") or p.get("documentos")
+                link = p.get("url") or p.get("link") or p.get("urlPauta") or ""
+
+                with st.expander(f"📅 {data_fmt} — {titulo}"):
+                    if descricao:
+                        st.write(descricao)
+                    elif proposicoes and isinstance(proposicoes, list):
+                        st.markdown("**Proposições em pauta:**")
+                        for item in proposicoes:
+                            if isinstance(item, dict):
+                                n_txt = item.get("numero") or item.get("titulo") or str(item)
+                                st.markdown(f"• {n_txt}")
+                            else:
+                                st.markdown(f"• {item}")
+                    else:
+                        # Mostra os campos disponíveis para encontrar o correto
+                        campos_com_valor = {k: v for k, v in p.items() if v and k not in ("data", "titulo", "dataSessao")}
+                        if campos_com_valor:
+                            for campo, valor in campos_com_valor.items():
+                                st.markdown(f"**{campo}:** {valor}")
+                        else:
+                            st.caption("A API não retornou detalhes adicionais para esta sessão.")
+
+                    if link:
+                        st.markdown(f"[📄 Ver pauta completa]({link})", unsafe_allow_html=False)
 
     with tab3:
         st.subheader("Últimas Notícias e Vídeos")
