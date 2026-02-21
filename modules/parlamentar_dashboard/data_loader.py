@@ -282,80 +282,113 @@ def calcular_total_despesas(df: pd.DataFrame) -> float:
 
 def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
     """
-    Busca o total gasto e a produção legislativa por CADA UM dos 513 deputados.
-    Usa cache persistente em disco (24h) para evitar 1026 chamadas de API a cada reload.
+    Ranking de gastos e produção legislativa para todos os deputados.
+    Cache persistente em disco (24h) — na 1ª geração faz chamadas diretas à API
+    sem passar pelo st.cache_data (thread-unsafe em workers).
     """
-    import os
+    import time as _t
     from pathlib import Path
     from datetime import datetime, timedelta
 
-    # ── Cache em disco ────────────────────────────────────────────────
     CACHE_DIR = Path(__file__).parent.parent.parent / "data" / "cache"
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_file = CACHE_DIR / f"ranking_global_{ano}.parquet"
-    TTL_HORAS = 24
 
     if cache_file.exists():
         age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
-        if age < timedelta(hours=TTL_HORAS):
+        if age < timedelta(hours=24):
             try:
                 return pd.read_parquet(cache_file)
             except Exception:
-                pass  # cache corrompido — recalcula
+                pass
 
-    # ── Busca ao vivo ─────────────────────────────────────────────────
     deputados = get_deputados()
     if not deputados:
         return pd.DataFrame()
 
-    results = []
+    # Sessão HTTP dedicada para as threads (sem st.cache_data)
+    _rank_session = requests.Session()
+    _rank_session.headers.update(HEADERS)
 
-    def fetch_data(dep):
-        """Busca com retry e backoff para evitar dados zerados por rate limit."""
-        import time as _time
-        for tentativa in range(3):
+    def _fetch_json(url: str, params: dict) -> dict | None:
+        """GET direto sem Streamlit cache — seguro para threads."""
+        for _ in range(2):
             try:
-                df_desp = get_despesas(dep["id"], ano)
-                total_gasto = calcular_total_despesas(df_desp)
-                proposicoes = get_proposicoes(dep["id"], ano)
-                qtd_prop = len(proposicoes)
-
-                # Se despesas vieram zeradas mas há proposições, provavelmente rate limit
-                # Tenta de novo com pequeno delay
-                if total_gasto == 0 and qtd_prop > 0 and tentativa < 2:
-                    _time.sleep(2 * (tentativa + 1))
+                r = _rank_session.get(url, params=params, timeout=8)
+                if r.status_code == 429:
+                    _t.sleep(int(r.headers.get("Retry-After", 3)))
                     continue
-
-                custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else float('inf')
-                return {
-                    "id":                   dep["id"],
-                    "nome":                 dep["nome"],
-                    "siglaPartido":         dep["siglaPartido"],
-                    "siglaUf":              dep["siglaUf"],
-                    "total_gasto":          total_gasto,
-                    "num_notas":            len(df_desp),
-                    "qtd_proposicoes":      qtd_prop,
-                    "custo_por_proposicao": custo_por_prop,
-                }
+                if r.status_code == 200 and r.text.strip():
+                    return r.json()
             except Exception:
-                _time.sleep(1 * (tentativa + 1))
+                pass
         return None
 
-    # 5 workers = ~50 req simultâneos — abaixo do rate limit da API da Câmara
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    def _total_gasto(dep_id: int) -> tuple[float, int]:
+        """Retorna (total_gasto, num_notas) buscando todas as páginas de despesas."""
+        total = 0.0
+        notas = 0
+        pagina = 1
+        for _ in range(15):  # max 1500 registros por deputado
+            data = _fetch_json(
+                f"{BASE_URL}/deputados/{dep_id}/despesas",
+                {"ano": ano, "itens": 100, "pagina": pagina}
+            )
+            if not data:
+                break
+            registros = data.get("dados", [])
+            if not registros:
+                break
+            for reg in registros:
+                try:
+                    total += float(str(reg.get("valorLiquido") or reg.get("valorDocumento") or 0).replace(",", "."))
+                    notas += 1
+                except (ValueError, TypeError):
+                    pass
+            links = data.get("links", [])
+            if not any(lnk.get("rel") == "next" for lnk in links):
+                break
+            pagina += 1
+        return total, notas
+
+    def _total_prop(dep_id: int) -> int:
+        """Retorna quantidade de proposições do deputado no ano."""
+        data = _fetch_json(
+            f"{BASE_URL}/proposicoes",
+            {"ano": ano, "idDeputadoAutor": dep_id, "itens": 100}
+        )
+        if not data:
+            return 0
+        return len(data.get("dados", []))
+
+    def fetch_data(dep):
+        total_gasto, num_notas = _total_gasto(dep["id"])
+        qtd_prop = _total_prop(dep["id"])
+        custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else float('inf')
+        return {
+            "id":                   dep["id"],
+            "nome":                 dep["nome"],
+            "siglaPartido":         dep.get("siglaPartido", ""),
+            "siglaUf":              dep.get("siglaUf", ""),
+            "total_gasto":          total_gasto,
+            "num_notas":            num_notas,
+            "qtd_proposicoes":      qtd_prop,
+            "custo_por_proposicao": custo_por_prop,
+        }
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
         raw = list(executor.map(fetch_data, deputados))
 
     results = [r for r in raw if r is not None]
     if not results:
         return pd.DataFrame()
 
-    df_ranking = pd.DataFrame(results).sort_values("total_gasto", ascending=False)
-    df_ranking = df_ranking.reset_index(drop=True)
+    df_ranking = pd.DataFrame(results).sort_values("total_gasto", ascending=False).reset_index(drop=True)
 
-    # Salva cache
     try:
         df_ranking.to_parquet(cache_file, index=False)
     except Exception:
         pass
 
     return df_ranking
+
