@@ -779,36 +779,61 @@ def main_municipal():
 
                 # ── Análise Crítica a partir dos PDFs manuais ──────────────
                 import subprocess as _sp
+                import unicodedata as _ud
                 from pathlib import Path as _Path
 
-                # Mapeamento: variações do nome → arquivo PDF em Analise/
-                ANALISE_MAP = {
-                    "joão cobalchini":        "Analise/Análise Crítica de João Cobalchini.pdf",
-                    "cobalchini":             "Analise/Análise Crítica de João Cobalchini.pdf",
-                    "bericó":                 "Analise/Análise Crítica_ João Paulo Ferreira (Bericó).pdf",
-                    "joão paulo ferreira":    "Analise/Análise Crítica_ João Paulo Ferreira (Bericó).pdf",
-                    "pri fernandes":          "Analise/Análise Crítica_ Pri Fernandes (PSD).pdf",
-                    "gui pereira":            "Analise/Análise Crítica_ Gui Pereira (PSD).pdf",
-                    "pastor giliard":         "Analise/Análise Crítica_ Pastor Giliard Torquato (PL).pdf",
-                    "torquato":               "Analise/Análise Crítica_ Pastor Giliard Torquato (PL).pdf",
-                    "adrianinho":             "Analise/Análise Crítica Vereador Adrianinho Republicanos.pdf",
-                    "afrânio boppré":         "Analise/Análise Crítica de Afrânio Boppré.pdf",
-                    "boppré":                 "Analise/Análise Crítica de Afrânio Boppré.pdf",
-                    "bezerra":                "Analise/Análise Crítica Vereador Bezerra MDB.pdf",
-                    "bruno ziliotto":         "Analise/Análise Crítica de Bruno Ziliotto.pdf",
-                    "ziliotto":               "Analise/Análise Crítica de Bruno Ziliotto.pdf",
-                }
-
                 BASE_DIR = _Path(__file__).parent.parent.parent
+                ANALISE_DIR = BASE_DIR / "Analise"
+
+                def _normalizar_texto(texto: str) -> str:
+                    """Remove acentos, converte para minúsculas e limpa caracteres especiais."""
+                    if not texto: return ""
+                    texto = texto.lower()
+                    # Remove acentos
+                    texto = "".join(
+                        c for c in _ud.normalize('NFD', texto)
+                        if _ud.category(c) != 'Mn'
+                    )
+                    # Remove pontuação básica para facilitar o match
+                    for char in "._-()[],:":
+                        texto = texto.replace(char, " ")
+                    return " ".join(texto.split())
 
                 def _buscar_pdf_analise(nome_vereador: str):
-                    nome_lower = nome_vereador.lower()
-                    for chave, caminho in ANALISE_MAP.items():
-                        if chave in nome_lower or nome_lower in chave:
-                            full = BASE_DIR / caminho
-                            if full.exists():
-                                return full
+                    """
+                    Busca dinamicamente na pasta Analise/ um PDF que corresponda ao nome.
+                    """
+                    if not ANALISE_DIR.exists():
+                        return None
+                    
+                    nome_norm = _normalizar_texto(nome_vereador)
+                    primeiro_nome = nome_norm.split()[0]
+                    
+                    # Scaneia todos os PDFs na pasta
+                    for pdf_path in ANALISE_DIR.glob("*.pdf"):
+                        pdf_norm = _normalizar_texto(pdf_path.name)
+                        
+                        # Match se o nome normalizado do vereador estiver no nome do arquivo
+                        # ou se partes significativas (como sobrenome único ou apelido) baterem
+                        if nome_norm in pdf_norm:
+                            return pdf_path
+                        
+                        # Match secundário por primeiro nome + partes adicionais
+                        partes_vereador = set(nome_norm.split())
+                        partes_pdf = set(pdf_norm.split())
+                        
+                        # Se houver interseção significativa (ex: primeiro nome + sobrenome)
+                        intersecao = partes_vereador.intersection(partes_pdf)
+                        # Ignora palavras curtas/comuns no match
+                        intersecao = {p for p in intersecao if len(p) > 3}
+                        
+                        if len(intersecao) >= 1:
+                            # Se for o primeiro nome + algo mais, ou um nome único longo
+                            if primeiro_nome in intersecao or any(len(p) > 5 for p in intersecao):
+                                return pdf_path
+                                
                     return None
+
 
                 def _ler_pdf_texto(pdf_path) -> str:
                     try:
