@@ -703,9 +703,53 @@ def main_municipal():
         if not veredadores:
             st.warning("Não foi possível carregar a lista de vereadores.")
         else:
-            df_v = pd.DataFrame(veredadores)
-            st.metric("👥 Total de Vereadores", len(df_v))
-            st.dataframe(df_v, use_container_width=True)
+            # Cores por partido
+            COR_PARTIDO = {
+                "PT": "#E53E3E", "PL": "#2B6CB0", "MDB": "#D69E2E",
+                "PSD": "#2F855A", "PSOL": "#6B46C1", "PP": "#C05621",
+                "REPUBLICANOS": "#B83280", "PDT": "#285E61", "PSDB": "#2563EB",
+                "SOLIDARIEDADE": "#D97706", "UNIÃO": "#0F766E",
+            }
+
+            st.metric("👥 Total de Vereadores", len(veredadores))
+            st.divider()
+
+            # Grid 4 colunas
+            cols = st.columns(4)
+            for i, v in enumerate(veredadores):
+                nome    = v.get("nome") or v.get("nomeVereador") or "N/A"
+                partido = (v.get("partido") or v.get("siglaPartido") or "—").upper()
+                funcao  = v.get("funcao") or v.get("cargo") or "Vereador(a)"
+                foto    = v.get("imagem") or v.get("urlFoto") or v.get("foto") or ""
+                link    = v.get("link") or v.get("url") or "#"
+
+                cor     = COR_PARTIDO.get(partido, "#4A5568")
+
+                with cols[i % 4]:
+                    # Card HTML estilizado
+                    foto_html = (
+                        f"<img src='{foto}' style='width:80px;height:80px;border-radius:50%;"
+                        f"object-fit:cover;border:3px solid {cor};margin-bottom:8px;display:block;margin-left:auto;margin-right:auto'>"
+                        if foto else
+                        f"<div style='width:80px;height:80px;border-radius:50%;background:{cor};"
+                        f"display:flex;align-items:center;justify-content:center;font-size:28px;"
+                        f"margin:0 auto 8px auto'>👤</div>"
+                    )
+                    st.markdown(f"""
+                    <div style='background:#1a1f2e;border:1px solid #2d3748;border-radius:12px;
+                        padding:16px 12px;text-align:center;margin-bottom:12px;
+                        transition:transform 0.2s'>
+                        {foto_html}
+                        <div style='font-weight:700;font-size:14px;color:#F7FAFC;
+                            margin-bottom:4px;white-space:nowrap;overflow:hidden;
+                            text-overflow:ellipsis' title='{nome}'>{nome}</div>
+                        <span style='background:{cor};color:white;font-size:11px;
+                            font-weight:700;padding:2px 8px;border-radius:20px;
+                            display:inline-block;margin-bottom:4px'>{partido}</span>
+                        <div style='color:#A0AEC0;font-size:12px'>{funcao}</div>
+                        {"<a href='" + link + "' target='_blank' style='color:#63B3ED;font-size:11px;text-decoration:none'>🔗 Perfil CMF</a>" if link and link != "#" else ""}
+                    </div>
+                    """, unsafe_allow_html=True)
 
     with tab2:
         st.subheader("Pautas das Próximas Sessões")
