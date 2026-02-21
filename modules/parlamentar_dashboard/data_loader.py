@@ -299,27 +299,38 @@ def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
     results = []
 
     def fetch_data(dep):
-        try:
-            df_desp = get_despesas(dep["id"], ano)
-            total_gasto = calcular_total_despesas(df_desp)
-            proposicoes = get_proposicoes(dep["id"], ano)
-            qtd_prop = len(proposicoes)
-            custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else float('inf')
-            return {
-                "id":                  dep["id"],
-                "nome":                dep["nome"],
-                "siglaPartido":        dep["siglaPartido"],
-                "siglaUf":             dep["siglaUf"],
-                "total_gasto":         total_gasto,
-                "num_notas":           len(df_desp),
-                "qtd_proposicoes":     qtd_prop,
-                "custo_por_proposicao": custo_por_prop,
-            }
-        except Exception:
-            # Não deixa um deputado com erro travar o ranking inteiro
-            return None
+        """Busca com retry e backoff para evitar dados zerados por rate limit."""
+        import time as _time
+        for tentativa in range(3):
+            try:
+                df_desp = get_despesas(dep["id"], ano)
+                total_gasto = calcular_total_despesas(df_desp)
+                proposicoes = get_proposicoes(dep["id"], ano)
+                qtd_prop = len(proposicoes)
 
-    with ThreadPoolExecutor(max_workers=20) as executor:
+                # Se despesas vieram zeradas mas há proposições, provavelmente rate limit
+                # Tenta de novo com pequeno delay
+                if total_gasto == 0 and qtd_prop > 0 and tentativa < 2:
+                    _time.sleep(2 * (tentativa + 1))
+                    continue
+
+                custo_por_prop = total_gasto / qtd_prop if qtd_prop > 0 else float('inf')
+                return {
+                    "id":                   dep["id"],
+                    "nome":                 dep["nome"],
+                    "siglaPartido":         dep["siglaPartido"],
+                    "siglaUf":              dep["siglaUf"],
+                    "total_gasto":          total_gasto,
+                    "num_notas":            len(df_desp),
+                    "qtd_proposicoes":      qtd_prop,
+                    "custo_por_proposicao": custo_por_prop,
+                }
+            except Exception:
+                _time.sleep(1 * (tentativa + 1))
+        return None
+
+    # 5 workers = ~50 req simultâneos — abaixo do rate limit da API da Câmara
+    with ThreadPoolExecutor(max_workers=5) as executor:
         raw = list(executor.map(fetch_data, deputados))
 
     results = [r for r in raw if r is not None]
