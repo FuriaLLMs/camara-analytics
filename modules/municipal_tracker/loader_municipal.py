@@ -1,25 +1,29 @@
-"""
-Conector de Dados para a Câmara Municipal de Florianópolis (CMF).
-Implementa o consumo da API JSON-Web para o projeto Transparência Vertical (V5.0).
-"""
 
 import requests
+import json
 import pandas as pd
 import streamlit as st
-from typing import List, Dict, Optional
+import os
+from pathlib import Path
+from typing import List, Dict, Optional, Any
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# Configurações da API CMF
+# Configurações da API CMF (Fallback)
 BASE_URL_CMF = "https://www.cmf.sc.gov.br/jsonweb/web-aplicativo.php"
 TOKEN_CMF = "bdox40jgz46d1o@tg0289kinqs19rgpi5xfvu9f7s88mqs-ee292b83687e83ec319"
 
 class MunicipalLoader:
-    """Carrega dados da Câmara Municipal de Florianópolis."""
+    """
+    Carrega dados da Câmara Municipal de Florianópolis.
+    Prioriza arquivos JSON na pasta 'jsnon/' (Offline-First / Hardcore Mode).
+    """
     
     def __init__(self):
         self.session = requests.Session()
-        # Estratégia de Retry para lidar com 'Connection Reset'
+        self.base_dir = Path(__file__).parent.parent.parent
+        self.jsnon_dir = self.base_dir / "jsnon"
+        
         retry_strategy = Retry(
             total=3,
             status_forcelist=[429, 500, 502, 503, 504],
@@ -29,92 +33,95 @@ class MunicipalLoader:
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
         
-        # Headers completos para mimetizar um navegador real (evita bloqueios de WAF)
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-            "Connection": "keep-alive"
+            "Accept": "application/json, text/plain, */*"
         })
 
+    def _load_local_json(self, prefix: str) -> List[Dict]:
+        """Busca e unifica arquivos JSON que começam com o prefixo na pasta jsnon/."""
+        all_data = []
+        if not self.jsnon_dir.exists():
+            return []
+            
+        # Lista todos os arquivos que batem com o prefixo (ex: pautas_*.json)
+        files = list(self.jsnon_dir.glob(f"{prefix}*.json"))
+        
+        for file_path in files:
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = json.load(f)
+                    if isinstance(content, list):
+                        all_data.extend(content)
+                    elif isinstance(content, dict):
+                        # Algumas APIs retornam {"dados": [...]}
+                        all_data.extend(content.get("dados", []))
+            except Exception as e:
+                print(f"Erro ao ler arquivo local {file_path}: {e}")
+                
+        # Deduplicação básica por link ou título (evita overlaps de abas)
+        seen = set()
+        unique_data = []
+        for item in all_data:
+            key = item.get("link") or item.get("url") or item.get("id") or item.get("titulo")
+            if key not in seen:
+                unique_data.append(item)
+                seen.add(key)
+        
+        return unique_data
+
     def _fetch(self, service: str, params: Optional[Dict] = None) -> List[Dict]:
-        """Método base para requisições GET à CMF."""
-        url_params = {
-            "keysoft": TOKEN_CMF,
-            "call": service
-        }
-        if params:
-            url_params.update(params)
+        """Fetch híbrido: tenta local primeiro, senão vai na API."""
+        # Tenta carregar localmente primeiro (Offline-First)
+        local = self._load_local_json(service)
+        if local:
+            return local
+
+        # Fallback para API (caso o arquivo local não exista ou esteja vazio)
+        url_params = {"keysoft": TOKEN_CMF, "call": service}
+        if params: url_params.update(params)
             
         try:
-            response = self.session.get(BASE_URL_CMF, params=url_params, timeout=15)
+            response = self.session.get(BASE_URL_CMF, params=url_params, timeout=10)
             response.raise_for_status()
             data = response.json()
-            # A API da CMF costuma retornar uma lista direta ou um dicionário com os dados
             return data if isinstance(data, list) else data.get("dados", [])
-        except Exception as e:
-            st.error(f"Erro ao acessar CMF ({service}): {e}")
+        except Exception:
             return []
 
     @st.cache_data(ttl=3600)
     def get_vereadores(_self) -> List[Dict]:
-        """Lista vereadores em exercício em Florianópolis."""
+        """Lista vereadores (Prioriza local jsnon/vereadores_*.json)."""
         return _self._fetch("vereadores")
 
-    @st.cache_data(ttl=1800)
-    def get_pautas(_self, pagina: int = 1) -> List[Dict]:
-        """Lista as pautas das sessões da CMF."""
-        return _self._fetch("pautas", {"pagina": pagina})
+    @st.cache_data(ttl=3600)
+    def get_pautas(_self) -> List[Dict]:
+        """Retorna TODAS as pautas unificadas dos arquivos locais."""
+        # Forçamos a busca local massiva
+        return _self._load_local_json("pautas")
 
-    @st.cache_data(ttl=1800)
-    def get_noticias(_self, pagina: int = 1) -> List[Dict]:
-        """Lista as notícias da Câmara Municipal."""
-        return _self._fetch("noticias", {"pagina": pagina})
+    @st.cache_data(ttl=3600)
+    def get_noticias(_self) -> List[Dict]:
+        """Retorna TODAS as notícias unificadas dos arquivos locais."""
+        return _self._load_local_json("noticias")
 
     @st.cache_data(ttl=3600)
     def get_tipos_proposicoes(_self) -> List[Dict]:
-        """Lista os tipos de proposições legislativas municipais."""
         return _self._fetch("proposicoes")
 
     @st.cache_data(ttl=3600)
     def get_bairros(_self) -> List[Dict]:
-        """Lista os bairros de Florianópolis atendidos."""
         return _self._fetch("bairros")
 
-    @st.cache_data(ttl=1800)
-    def get_tv_camara(_self, pagina: int = 1) -> List[Dict]:
-        """Lista vídeos da TV Câmara de Florianópolis."""
-        return _self._fetch("tvcamara", {"pagina": pagina})
+    @st.cache_data(ttl=3600)
+    def get_atendimento(_self) -> List[Dict]:
+        return _self._fetch("atendimento")
 
     @st.cache_data(ttl=3600)
-    def get_proposicoes_lista(_self, max_paginas: int = 5) -> List[Dict]:
-        """
-        Busca proposicões reais varrendo as páginas disponíveis.
-        Primeiro lista os tipos, depois busca proposições de cada tipo.
-        """
-        tipos = _self._fetch("proposicoes")
-        todas = []
-        # Tenta pelos primeiros tipos disponibilizados pela API
-        for tipo in tipos[:3]:  # limita pra não demorar demais
-            contract = tipo.get("contract") or tipo.get("id") or tipo.get("codigo")
-            if not contract:
-                continue
-            for pagina in range(1, max_paginas + 1):
-                dados = _self._fetch("proposicoes", {"tipo": contract, "pagina": pagina})
-                if not dados:
-                    break
-                todas.extend(dados)
-        return todas
+    def get_tv_camara(_self) -> List[Dict]:
+        return _self._fetch("tvcamara")
 
-    @st.cache_data(ttl=1800)
-    def get_noticias_todas(_self, max_paginas: int = 5) -> List[Dict]:
-        """Busca notícias varrendo múltiplas páginas para ampliar o pool de busca."""
-        todas = []
-        for pagina in range(1, max_paginas + 1):
-            dados = _self._fetch("noticias", {"pagina": pagina})
-            if not dados:
-                break
-            todas.extend(dados)
-        return todas
+    def get_proposicoes_lista(_self, max_paginas: int = 5) -> List[Dict]:
+        """Mantido para compatibilidade, mas prioriza o fluxo offline."""
+        return _self._fetch("proposicoes") # Simplificado para o modo hardcore
+

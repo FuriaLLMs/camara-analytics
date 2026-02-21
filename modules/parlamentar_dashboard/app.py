@@ -1012,7 +1012,32 @@ def main_municipal():
                     resumo += ("\n\n" if comissao_txt else "") + f"_{tipo_desc}_"
                 return icone, resumo or "🏗️ Sessão legislativa da Câmara Municipal de Florianópolis."
 
-            for p in pautas[:15]:
+
+            # --- Busca e Filtragem Hardcore ---
+            st.markdown("#### 🔍 Buscar nas Pautas")
+            col_search_1, col_search_2 = st.columns([3, 1])
+            with col_search_1:
+                search_query = st.text_input("Filtrar por título, data ou comissão:", placeholder="Ex: CCJ, 2024, Audiência...", label_visibility="collapsed")
+            with col_search_2:
+                st.write(f"📊 {len(pautas)} pautas carregadas")
+
+            if search_query:
+                pautas_filtered = [
+                    p for p in pautas 
+                    if search_query.lower() in (p.get("titulo", "") + p.get("data", "")).lower()
+                ]
+                st.info(f"Encontradas {len(pautas_filtered)} pautas correspondentes.")
+            else:
+                pautas_filtered = pautas
+
+            # --- Lógica de Paginação das Pautas ---
+            if "pautas_limit" not in st.session_state or search_query:
+                # Reset do limite ao pesquisar para mostrar resultados relevantes
+                st.session_state.pautas_limit = 100 if not search_query else 50
+            
+            pautas_page = pautas_filtered[:st.session_state.pautas_limit]
+
+            for p in pautas_page:
                 data_fmt = p.get("data") or p.get("dataSessao") or "Data não informada"
                 titulo = p.get("titulo") or p.get("nome") or "Sem Título"
                 link = p.get("url") or p.get("link") or p.get("urlPauta") or ""
@@ -1021,6 +1046,13 @@ def main_municipal():
                     st.markdown(resumo)
                     if link:
                         st.markdown(f"[📄 Ver proposições em pauta]({link})")
+
+            # Botão para carregar mais pautas
+            if len(pautas_filtered) > st.session_state.pautas_limit:
+                if st.button(f"📥 Ver mais 100 pautas (+{len(pautas_filtered) - st.session_state.pautas_limit} restantes)", use_container_width=True):
+                    st.session_state.pautas_limit += 100
+                    st.rerun()
+
 
     with tab3:
         st.subheader("Últimas Notícias e Vídeos")
