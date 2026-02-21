@@ -608,21 +608,33 @@ def plot_spending_ranking(df: pd.DataFrame) -> go.Figure:
 
 # ── 11. Bolhas de Anomalias (Outliers) ─────────────────────────
 def plot_anomaly_bubbles(df_outliers: pd.DataFrame) -> go.Figure:
-    """Gráfico de dispersão evidenciando gastos anômalos."""
+    """Gráfico de dispersão evidenciando gastos anômalos.
+    
+    Converte o z_score em tamanho visual através de normalização Min-Max [5, 55],
+    garantindo que: (a) não existam tamanhos negativos e (b) outliers extremos não
+    dominem a escala visual, mantendo todas as bolhas proporcionalmente legíveis.
+    """
     if df_outliers.empty:
         return _empty_fig("Nenhuma anomalia estatística detectada (Z-Score < 3.0)")
 
     df_plot = df_outliers.copy()
-    
-    # Bug Hunt: Plotly não aceita marker.size negativo. 
-    # Mapeamos magnitude visual (tamanho) para o valor absoluto do desvio.
-    df_plot["intensidade_desvio"] = df_plot["z_score"].abs()
+
+    # Passo 1: Magnitude absoluta (sinal não faz sentido como tamanho geométrico)
+    magnitude = df_plot["z_score"].abs()
+
+    # Passo 2: Normalização Min-Max → escala visual [5, 55] px
+    # O epsilon (1e-9) evita divisão por zero quando todos os z-scores são iguais
+    min_m, max_m = magnitude.min(), magnitude.max()
+    df_plot["bubble_size"] = (
+        (magnitude - min_m) / (max_m - min_m + 1e-9)
+    ) * 50 + 5   # range: 5 (mínimo legível) → 55 (máximo expressivo)
 
     fig = px.scatter(
         df_plot,
         x="data_documento" if "data_documento" in df_plot.columns else "mes",
         y="valor_liquido",
-        size="intensidade_desvio",
+        size="bubble_size",
+        size_max=60,   # cap para evitar bolhas absurdas em datasets com outliers extremos
         color="categoria",
         hover_name="fornecedor",
         title="🚨 Gastos com Desvio Estatístico Alto (Outliers)",
@@ -633,21 +645,21 @@ def plot_anomaly_bubbles(df_outliers: pd.DataFrame) -> go.Figure:
             "data_documento": "Data",
             "mes": "Mês",
             "categoria": "Categoria",
-            "intensidade_desvio": "Magnitude do Desvio"
+            "bubble_size": "Intensidade (Normalizada)"
         },
-        custom_data=["z_score"] # Mantemos o valor real (com sinal) para o hover
+        custom_data=["z_score"]  # Sinal real preservado para o hover
     )
 
     fig.update_traces(
         marker=dict(line=dict(width=1, color=TEXTO)),
         selector=dict(mode="markers"),
-        # Mostramos o z-score real (com sinal) no hover para precisão acadêmica
-        hovertemplate="<b>%{hovertext}</b><br>Valor: R$ %{y:,.2f}<br>Desvio: %{customdata[0]:.1f}σ<extra></extra>"
+        # Hover mostra o z-score original (com sinal) para precisão estatística
+        hovertemplate="<b>%{hovertext}</b><br>Valor: R$ %{y:,.2f}<br>Desvio: %{customdata[0]:.2f}σ<extra></extra>"
     )
-    
+
     fig.update_layout(
         **_layout(
-            height=450, 
+            height=450,
             legend=dict(title_text="Categorias de Gastos", orientation="h", y=-0.2)
         )
     )
