@@ -762,58 +762,82 @@ def main_municipal():
                         st.link_button("🏛️ Ver perfil oficial na CMF", link)
                 st.divider()
 
-                # ── Proposições do servidor (busca por nome no pool real) ────
-                st.markdown("### 📋 Proposições Legislativas")
-                with st.spinner("Buscando proposições na base da CMF..."):
-                    # Busca pool real de proposições (paginado por tipo)
-                    todas_prop = loader_mun.get_proposicoes_lista()
-                    # Filtro robusto: qualquer palavra significativa do nome
-                    palavras_nome = [p for p in nome.lower().split() if len(p) > 3]
-                    prop_rel = [
-                        p for p in todas_prop
-                        if any(w in str(p).lower() for w in palavras_nome)
-                    ]
+                # ── Análise Crítica a partir dos PDFs manuais ──────────────
+                import subprocess as _sp
+                from pathlib import Path as _Path
 
-                if prop_rel:
-                    for pr in prop_rel[:8]:
-                        numero_pr = pr.get("numero") or pr.get("id") or ""
-                        tipo_pr   = pr.get("tipo") or pr.get("descricaoTipo") or ""
-                        ementa_pr = pr.get("ementa") or pr.get("titulo") or pr.get("descricao") or "Sem ementa"
-                        data_pr   = pr.get("data") or pr.get("dataApresentacao") or ""
-                        link_pr   = pr.get("link") or pr.get("url") or ""
-                        linkify   = f" [🔗]({link_pr})" if link_pr else ""
-                        st.markdown(f"📄 `{tipo_pr} {numero_pr}` `{data_pr}` — {ementa_pr}{linkify}")
-                else:
-                    # Se pool for vazio, provavelmente a API não retornou dados
-                    if not todas_prop:
-                        st.warning("⚠️ A API da CMF não retornou proposições na busca atual.")
+                # Mapeamento: variações do nome → arquivo PDF em Analise/
+                ANALISE_MAP = {
+                    "joão cobalchini":        "Analise/Análise Crítica de João Cobalchini.pdf",
+                    "cobalchini":             "Analise/Análise Crítica de João Cobalchini.pdf",
+                    "bericó":                 "Analise/Análise Crítica_ João Paulo Ferreira (Bericó).pdf",
+                    "joão paulo ferreira":    "Analise/Análise Crítica_ João Paulo Ferreira (Bericó).pdf",
+                    "pri fernandes":          "Analise/Análise Crítica_ Pri Fernandes (PSD).pdf",
+                    "gui pereira":            "Analise/Análise Crítica_ Gui Pereira (PSD).pdf",
+                    "pastor giliard":         "Analise/Análise Crítica_ Pastor Giliard Torquato (PL).pdf",
+                    "torquato":               "Analise/Análise Crítica_ Pastor Giliard Torquato (PL).pdf",
+                    "adrianinho":             "Analise/Análise Crítica Vereador Adrianinho Republicanos.pdf",
+                    "afrânio boppré":         "Analise/Análise Crítica de Afrânio Boppré.pdf",
+                    "boppré":                 "Analise/Análise Crítica de Afrânio Boppré.pdf",
+                    "bezerra":                "Analise/Análise Crítica Vereador Bezerra MDB.pdf",
+                    "bruno ziliotto":         "Analise/Análise Crítica de Bruno Ziliotto.pdf",
+                    "ziliotto":               "Analise/Análise Crítica de Bruno Ziliotto.pdf",
+                }
+
+                BASE_DIR = _Path(__file__).parent.parent.parent
+
+                def _buscar_pdf_analise(nome_vereador: str):
+                    nome_lower = nome_vereador.lower()
+                    for chave, caminho in ANALISE_MAP.items():
+                        if chave in nome_lower or nome_lower in chave:
+                            full = BASE_DIR / caminho
+                            if full.exists():
+                                return full
+                    return None
+
+                def _ler_pdf_texto(pdf_path) -> str:
+                    try:
+                        result = _sp.run(
+                            ["pdftotext", "-layout", str(pdf_path), "-"],
+                            capture_output=True, text=True, timeout=10
+                        )
+                        return result.stdout.strip()
+                    except Exception:
+                        return ""
+
+                pdf_path = _buscar_pdf_analise(nome)
+
+                if pdf_path:
+                    st.markdown("### 📄 Análise Crítica")
+                    st.success(f"📌 Análise disponível — {pdf_path.name}")
+
+                    texto_pdf = _ler_pdf_texto(pdf_path)
+                    if texto_pdf:
+                        # Divide em seções pelos títulos em caixa alta / numerados
+                        import re as _re
+                        secoes = _re.split(r'\n(?=[A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚÀÂÊÔãõ\s,]{10,}(?:\n|\r))', texto_pdf)
+
+                        # Exibe as primeiras 1500 chars inline + expander com tudo
+                        preview = texto_pdf[:1800].replace('\n', '  \n')
+                        st.markdown(preview + "...")
+                        with st.expander("📖 Ler análise completa"):
+                            st.text(texto_pdf)
                     else:
-                        st.info(f"📋 Encontramos **{len(todas_prop)} proposições** na CMF, mas nenhuma com o nome '{nome}' no texto. Consulte o perfil oficial para a lista completa autoral.")
+                        st.info("PDF carregado mas texto não pôde ser extraído. Baixe o PDF para visualizar.")
 
-                # ── Notícias recentes com nome ─────────────────────────────────
-                st.divider()
-                st.markdown("### 📰 Notícias Recentes")
-                with st.spinner("Varrendo notícias das últimas páginas..."):
-                    # Busca mais páginas de notícias
-                    noticias_all = loader_mun.get_noticias_todas()
-                    palavras_nome = [p for p in nome.lower().split() if len(p) > 3]
-                    noticias_rel = [
-                        n for n in noticias_all
-                        if any(w in str(n).lower() for w in palavras_nome)
-                    ]
-
-                if noticias_rel:
-                    for n in noticias_rel[:6]:
-                        data_n   = n.get("data") or ""
-                        titulo_n = n.get("titulo") or n.get("descricao") or "Notícia"
-                        link_n   = n.get("link") or n.get("url") or ""
-                        linkify  = f" — [🔗 ler]({link_n})" if link_n else ""
-                        st.markdown(f"📰 `{data_n}` {titulo_n}{linkify}")
+                    # Botão de download do PDF
+                    with open(pdf_path, "rb") as f_pdf:
+                        st.download_button(
+                            label="⬇️ Baixar análise completa (PDF)",
+                            data=f_pdf.read(),
+                            file_name=pdf_path.name,
+                            mime="application/pdf"
+                        )
                 else:
-                    if not noticias_all:
-                        st.warning("⚠️ A API da CMF não retornou notícias nas últimas consultas.")
-                    else:
-                        st.info(f"📰 Varremos **{len(noticias_all)} notícias** da CMF. Nenhuma menciona '{nome.split()[0]}' diretamente. Consulte o portal oficial.")
+                    st.markdown("### 📄 Análise Crítica")
+                    st.info("📋 Análise individual ainda não disponível para este servidor. Em breve.")
+                    if link:
+                        st.markdown(f"Consulte o [perfil oficial na CMF]({link}) enquanto isso.")
 
             # ════════════════════════════════════════════════════════
             # MODO GRID: lista todos os vereadores em cards clicáveis
