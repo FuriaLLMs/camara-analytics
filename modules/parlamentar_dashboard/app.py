@@ -732,9 +732,41 @@ def main_municipal():
         
         with col_v:
             st.markdown("#### 🎥 TV Câmara Florianópolis")
-            for video in tv[:3]:
-                st.video(video.get("url"))
-                st.caption(video.get("titulo"))
+            if not tv:
+                st.info("Nenhum vídeo disponível no momento.")
+            else:
+                for video in tv[:5]:
+                    titulo = video.get("titulo") or video.get("descricao") or "Vídeo CMF"
+                    legenda = video.get("data") or video.get("dataSessao") or ""
+                    
+                    # A CMF pode usar campos variados para a URL
+                    link = (
+                        video.get("url") or video.get("urlVideo") or
+                        video.get("link") or video.get("urlYoutube") or ""
+                    )
+                    
+                    # Tenta embed do YouTube se for link YT
+                    if link and ("youtube.com" in link or "youtu.be" in link):
+                        try:
+                            st.video(link)
+                            st.caption(f"📅 {legenda} — {titulo}")
+                        except Exception:
+                            st.markdown(f"🎬 [{titulo}]({link})")
+                    elif link:
+                        # Link de página HTML → exibe como card clicável
+                        st.markdown(
+                            f"""<div style='border:1px solid #374151; border-radius:8px;
+                                padding:12px; margin-bottom:8px; background:#111827'>
+                            🎬 <a href="{link}" target="_blank" style='color:#60A5FA;
+                                text-decoration:none; font-weight:600'>{titulo}</a>
+                            <br><small style='color:#9CA3AF'>📅 {legenda}</small>
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        # Sem URL — mostra o que tiver
+                        with st.expander(f"🎬 {titulo}"):
+                            st.json(video)
 
 # ── Execução do App ───────────────────────────────────────────
 if escopo == "🇧🇷 Federal (Brasília)":
