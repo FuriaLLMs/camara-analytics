@@ -760,40 +760,60 @@ def main_municipal():
                     st.markdown(f"**Câmara:** Câmara Municipal de Florianópolis (CMF-SC)")
                     if link:
                         st.link_button("🏛️ Ver perfil oficial na CMF", link)
-
                 st.divider()
 
-                # ── Proposições do vereador (busca por nome) ──────
+                # ── Proposições do servidor (busca por nome no pool real) ────
                 st.markdown("### 📋 Proposições Legislativas")
-                with st.spinner("Buscando proposições..."):
-                    todas_prop = loader_mun.get_pautas()  # proxy — pautas relacionadas
-                    prop_rel = [p for p in todas_prop if nome.split()[0].lower() in str(p).lower()]
+                with st.spinner("Buscando proposições na base da CMF..."):
+                    # Busca pool real de proposições (paginado por tipo)
+                    todas_prop = loader_mun.get_proposicoes_lista()
+                    # Filtro robusto: qualquer palavra significativa do nome
+                    palavras_nome = [p for p in nome.lower().split() if len(p) > 3]
+                    prop_rel = [
+                        p for p in todas_prop
+                        if any(w in str(p).lower() for w in palavras_nome)
+                    ]
 
                 if prop_rel:
-                    for pr in prop_rel[:5]:
-                        titulo_pr = pr.get("titulo") or pr.get("nome") or "Proposição"
-                        data_pr   = pr.get("data") or ""
-                        st.markdown(f"📄 `{data_pr}` — {titulo_pr}")
+                    for pr in prop_rel[:8]:
+                        numero_pr = pr.get("numero") or pr.get("id") or ""
+                        tipo_pr   = pr.get("tipo") or pr.get("descricaoTipo") or ""
+                        ementa_pr = pr.get("ementa") or pr.get("titulo") or pr.get("descricao") or "Sem ementa"
+                        data_pr   = pr.get("data") or pr.get("dataApresentacao") or ""
+                        link_pr   = pr.get("link") or pr.get("url") or ""
+                        linkify   = f" [🔗]({link_pr})" if link_pr else ""
+                        st.markdown(f"📄 `{tipo_pr} {numero_pr}` `{data_pr}` — {ementa_pr}{linkify}")
                 else:
-                    st.info("Nenhuma proposição diretamente vinculada encontrada pela API. Veja o perfil oficial para a lista completa.")
+                    # Se pool for vazio, provavelmente a API não retornou dados
+                    if not todas_prop:
+                        st.warning("⚠️ A API da CMF não retornou proposições na busca atual.")
+                    else:
+                        st.info(f"📋 Encontramos **{len(todas_prop)} proposições** na CMF, mas nenhuma com o nome '{nome}' no texto. Consulte o perfil oficial para a lista completa autoral.")
 
-                # ── Notícias recentes com nome ─────────────────────
+                # ── Notícias recentes com nome ─────────────────────────────────
                 st.divider()
                 st.markdown("### 📰 Notícias Recentes")
-                with st.spinner("Buscando notícias..."):
-                    noticias_all = loader_mun.get_noticias()
-                    nome_busca = nome.split()[0].lower()
-                    noticias_rel = [n for n in noticias_all if nome_busca in str(n).lower()]
+                with st.spinner("Varrendo notícias das últimas páginas..."):
+                    # Busca mais páginas de notícias
+                    noticias_all = loader_mun.get_noticias_todas()
+                    palavras_nome = [p for p in nome.lower().split() if len(p) > 3]
+                    noticias_rel = [
+                        n for n in noticias_all
+                        if any(w in str(n).lower() for w in palavras_nome)
+                    ]
 
                 if noticias_rel:
-                    for n in noticias_rel[:5]:
-                        data_n    = n.get("data") or ""
-                        titulo_n  = n.get("titulo") or n.get("descricao") or "Notícia"
-                        link_n    = n.get("link") or n.get("url") or ""
-                        linkify   = f" — [🔗 ler]({link_n})" if link_n else ""
+                    for n in noticias_rel[:6]:
+                        data_n   = n.get("data") or ""
+                        titulo_n = n.get("titulo") or n.get("descricao") or "Notícia"
+                        link_n   = n.get("link") or n.get("url") or ""
+                        linkify  = f" — [🔗 ler]({link_n})" if link_n else ""
                         st.markdown(f"📰 `{data_n}` {titulo_n}{linkify}")
                 else:
-                    st.info("Nenhuma notícia recente encontrada com o nome deste servidor público.")
+                    if not noticias_all:
+                        st.warning("⚠️ A API da CMF não retornou notícias nas últimas consultas.")
+                    else:
+                        st.info(f"📰 Varremos **{len(noticias_all)} notícias** da CMF. Nenhuma menciona '{nome.split()[0]}' diretamente. Consulte o portal oficial.")
 
             # ════════════════════════════════════════════════════════
             # MODO GRID: lista todos os vereadores em cards clicáveis

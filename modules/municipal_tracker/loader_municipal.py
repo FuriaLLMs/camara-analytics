@@ -87,3 +87,34 @@ class MunicipalLoader:
     def get_tv_camara(_self, pagina: int = 1) -> List[Dict]:
         """Lista vídeos da TV Câmara de Florianópolis."""
         return _self._fetch("tvcamara", {"pagina": pagina})
+
+    @st.cache_data(ttl=3600)
+    def get_proposicoes_lista(_self, max_paginas: int = 5) -> List[Dict]:
+        """
+        Busca proposicões reais varrendo as páginas disponíveis.
+        Primeiro lista os tipos, depois busca proposições de cada tipo.
+        """
+        tipos = _self._fetch("proposicoes")
+        todas = []
+        # Tenta pelos primeiros tipos disponibilizados pela API
+        for tipo in tipos[:3]:  # limita pra não demorar demais
+            contract = tipo.get("contract") or tipo.get("id") or tipo.get("codigo")
+            if not contract:
+                continue
+            for pagina in range(1, max_paginas + 1):
+                dados = _self._fetch("proposicoes", {"tipo": contract, "pagina": pagina})
+                if not dados:
+                    break
+                todas.extend(dados)
+        return todas
+
+    @st.cache_data(ttl=1800)
+    def get_noticias_todas(_self, max_paginas: int = 5) -> List[Dict]:
+        """Busca notícias varrendo múltiplas páginas para ampliar o pool de busca."""
+        todas = []
+        for pagina in range(1, max_paginas + 1):
+            dados = _self._fetch("noticias", {"pagina": pagina})
+            if not dados:
+                break
+            todas.extend(dados)
+        return todas
