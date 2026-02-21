@@ -352,14 +352,26 @@ def get_ranking_gastos_global(ano: int) -> pd.DataFrame:
         return total, notas
 
     def _total_prop(dep_id: int) -> int:
-        """Retorna quantidade de proposições do deputado no ano."""
-        data = _fetch_json(
-            f"{BASE_URL}/proposicoes",
-            {"ano": ano, "idDeputadoAutor": dep_id, "itens": 100}
-        )
-        if not data:
-            return 0
-        return len(data.get("dados", []))
+        """Retorna quantidade TOTAL de proposições do deputado no ano (todas as páginas)."""
+        total = 0
+        pagina = 1
+        for _ in range(20):  # max 2000 proposições por deputado
+            data = _fetch_json(
+                f"{BASE_URL}/proposicoes",
+                {"ano": ano, "idDeputadoAutor": dep_id, "itens": 100, "pagina": pagina}
+            )
+            if not data:
+                break
+            registros = data.get("dados", [])
+            if not registros:
+                break
+            total += len(registros)
+            links = data.get("links", [])
+            if not any(lnk.get("rel") == "next" for lnk in links):
+                break
+            pagina += 1
+        return total
+
 
     def fetch_data(dep):
         total_gasto, num_notas = _total_gasto(dep["id"])
