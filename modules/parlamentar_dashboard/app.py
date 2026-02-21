@@ -813,7 +813,78 @@ def main_municipal():
 
                     texto_pdf = _ler_pdf_texto(pdf_path)
                     if texto_pdf:
-                        st.text(texto_pdf)
+                        import re as _re
+
+                        def _render_pdf_formatado(texto: str):
+                            """
+                            Converte texto bruto extraído de PDF em markdown formatado.
+                            Detecta títulos, parágrafos e linhas de tabela.
+                            """
+                            linhas = texto.split('\n')
+                            i = 0
+                            buffer_paragrafo = []
+
+                            def flush_paragrafo():
+                                if buffer_paragrafo:
+                                    txt = ' '.join(buffer_paragrafo).strip()
+                                    # Remove referências numéricas soltas [1], .1, .3
+                                    txt = _re.sub(r'(?<!\w)[\.\s]?\d+\s*$', '', txt)
+                                    if txt:
+                                        st.markdown(txt)
+                                    buffer_paragrafo.clear()
+
+                            while i < len(linhas):
+                                linha = linhas[i]
+                                linha_strip = linha.strip()
+
+                                # ── Linha vazia → flush do parágrafo ──────────
+                                if not linha_strip:
+                                    flush_paragrafo()
+                                    i += 1
+                                    continue
+
+                                # ── Detecta TÍTULO: linha curta (<= 80 chars)
+                                #    que não termina com ponto, e a próxima é vazia
+                                proxima = linhas[i + 1].strip() if i + 1 < len(linhas) else ""
+                                eh_titulo = (
+                                    len(linha_strip) <= 80 and
+                                    not linha_strip.endswith('.') and
+                                    not linha_strip.endswith(',') and
+                                    not linha_strip.endswith(':') and
+                                    (proxima == "" or (len(proxima) > 80)) and
+                                    len(linha_strip) > 5 and
+                                    not linha_strip[0].isdigit()
+                                )
+
+                                # ── Detecta linha de tabela: 3+ espaços separando colunas ──
+                                eh_tabela = bool(_re.search(r'\s{3,}', linha_strip)) and len(linha_strip.split()) >= 2
+
+                                if eh_titulo and not eh_tabela:
+                                    flush_paragrafo()
+                                    # Remove numerações de referência no final
+                                    titulo = _re.sub(r'[\.\d]+\s*$', '', linha_strip).strip()
+                                    st.markdown(f"### {titulo}")
+                                    st.markdown("---")
+                                elif eh_tabela:
+                                    flush_paragrafo()
+                                    # Normaliza espaços excessivos da tabela
+                                    colunas = _re.split(r'\s{3,}', linha_strip)
+                                    colunas = [c.strip() for c in colunas if c.strip()]
+                                    if len(colunas) >= 2:
+                                        st.markdown("| " + " | ".join(colunas) + " |")
+                                    else:
+                                        st.markdown(linha_strip)
+                                else:
+                                    # Parágrafo normal — acumula
+                                    linha_limpa = _re.sub(r'\s+', ' ', linha_strip)
+                                    buffer_paragrafo.append(linha_limpa)
+
+                                i += 1
+
+                            flush_paragrafo()
+
+                        _render_pdf_formatado(texto_pdf)
+
                     else:
                         st.info("PDF carregado mas texto não pôde ser extraído. Baixe o PDF para visualizar.")
 
