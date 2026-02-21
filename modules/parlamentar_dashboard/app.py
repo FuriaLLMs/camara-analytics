@@ -813,15 +813,7 @@ def main_municipal():
 
                     texto_pdf = _ler_pdf_texto(pdf_path)
                     if texto_pdf:
-                        # Divide em seções pelos títulos em caixa alta / numerados
-                        import re as _re
-                        secoes = _re.split(r'\n(?=[A-ZÁÉÍÓÚ][A-Za-zÁÉÍÓÚÀÂÊÔãõ\s,]{10,}(?:\n|\r))', texto_pdf)
-
-                        # Exibe as primeiras 1500 chars inline + expander com tudo
-                        preview = texto_pdf[:1800].replace('\n', '  \n')
-                        st.markdown(preview + "...")
-                        with st.expander("📖 Ler análise completa"):
-                            st.text(texto_pdf)
+                        st.text(texto_pdf)
                     else:
                         st.info("PDF carregado mas texto não pôde ser extraído. Baixe o PDF para visualizar.")
 
