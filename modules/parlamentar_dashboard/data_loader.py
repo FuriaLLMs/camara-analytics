@@ -40,30 +40,47 @@ def _get(
     url: str,
     params: dict | None = None,
     silent: bool = False,
+    _max_retries: int = 4,
 ) -> dict | None:
     """
-    GET centralizado com tratamento de erros, retentativas e validação de JSON.
+    GET centralizado com retry automático e backoff exponencial.
+    Respeita o header Retry-After em respostas 429.
     """
-    try:
-        r = session.get(url, params=params, timeout=TIMEOUT)
-        r.raise_for_status()
-        
-        # Bug Hunt: Validar se o corpo não está vazio antes de .json()
-        if not r.text.strip():
+    import time as _time
+    for tentativa in range(_max_retries):
+        try:
+            r = session.get(url, params=params, timeout=TIMEOUT)
+
+            if r.status_code == 429:
+                retry_after = int(r.headers.get("Retry-After", 5 * (tentativa + 1)))
+                if not silent:
+                    st.warning(f"⏳ Rate limit na API. Aguardando {retry_after}s...", icon="🐢")
+                _time.sleep(retry_after)
+                continue  # retenta
+
+            r.raise_for_status()
+
+            if not r.text.strip():
+                return None
+
+            return r.json()
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            wait = 2 ** tentativa
+            _time.sleep(wait)
+            if tentativa == _max_retries - 1 and not silent:
+                st.error("🔌 Falha de rede persistente: Verifique sua conexão.", icon="🌐")
+
+        except requests.exceptions.HTTPError as e:
+            if not silent:
+                st.warning(f"⚠️ Erro na API (HTTP {e.response.status_code})", icon="🔴")
             return None
-            
-        return r.json()
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-        if not silent:
-            st.error("🔌 Falha de rede: Verifique sua conexão.", icon="🌐")
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 429:
-            if not silent: st.warning("🐢 A API da Câmara limitou as requisições (Rate Limit). Aguarde um instante.", icon="⏳")
-        elif not silent:
-            st.warning(f"⚠️ Erro na API (HTTP {e.response.status_code})", icon="🔴")
-    except Exception as e:
-        if not silent:
-            st.warning(f"💣 Erro crítico inesperado: {str(e)[:50]}...", icon="⚠️")
+
+        except Exception as e:
+            if not silent:
+                st.warning(f"💣 Erro crítico: {str(e)[:50]}...", icon="⚠️")
+            return None
+
     return None
 
 
@@ -75,21 +92,14 @@ def _paginate(
 ) -> list[dict]:
     """
     Busca paginada genérica usando links HATEOAS (rel='next').
-
-    Args:
-        url: URL do endpoint.
-        params: Parâmetros base da query.
-        silent: Suprimir warnings de erro.
-        max_paginas: Limite de segurança contra loops infinitos.
-
-    Returns:
-        Lista agregada de todos os registros encontrados.
+    Inclui pequeno delay entre páginas para não saturar a API.
     """
+    import time as _time
     todos: list[dict] = []
     p = dict(params)
     p.setdefault("pagina", 1)
 
-    for _ in range(max_paginas):
+    for pagina_num in range(max_paginas):
         data = _get(url, p, silent=silent)
         if not data:
             break
@@ -102,10 +112,12 @@ def _paginate(
             break
         p = dict(p)
         p["pagina"] = p.get("pagina", 1) + 1
-        
-    # Bug Hunt: Avisar se truncamos os dados
+        # Pequeno delay para não saturar a API entre páginas consecutivas
+        if pagina_num > 0:
+            _time.sleep(0.2)
+
     if len(todos) >= max_paginas * p.get("itens", 100) and not silent:
-        st.warning(f"⚠️ Os dados podem estar incompletos (limite de {max_paginas} páginas atingido).", icon="🧱")
+        st.warning(f"⚠️ Dados podem estar incompletos (limite de {max_paginas} páginas atingido).", icon="🧱")
 
     return todos
 
